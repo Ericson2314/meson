@@ -291,9 +291,9 @@ class CCompiler(Compiler):
         return []
 
     def gen_export_dynamic_link_args(self, env):
-        if for_windows(env.is_cross_build(), env) or for_cygwin(env.is_cross_build(), env):
+        if for_windows(env) or for_cygwin(env):
             return ['-Wl,--export-all-symbols']
-        elif for_darwin(env.is_cross_build(), env):
+        elif for_darwin(env):
             return []
         else:
             return ['-Wl,-export-dynamic']
@@ -894,7 +894,7 @@ class CCompiler(Compiler):
         for p in prefixes:
             for s in suffixes:
                 patterns.append(p + '{}.' + s)
-        if shared and for_openbsd(self.is_cross, env):
+        if shared and for_openbsd(env):
             # Shared libraries on OpenBSD can be named libfoo.so.X.Y:
             # https://www.openbsd.org/faq/ports/specialtopics.html#SharedLibs
             #
@@ -918,9 +918,9 @@ class CCompiler(Compiler):
         else:
             prefixes = ['lib', '']
         # Library suffixes and prefixes
-        if for_darwin(env.is_cross_build(), env):
+        if for_darwin(env):
             shlibext = ['dylib', 'so']
-        elif for_windows(env.is_cross_build(), env):
+        elif for_windows(env):
             # FIXME: .lib files can be import or static so we should read the
             # file, figure out which one it is, and reject the wrong kind.
             if isinstance(self, VisualStudioCCompiler):
@@ -929,7 +929,7 @@ class CCompiler(Compiler):
                 shlibext = ['dll.a', 'lib', 'dll']
             # Yep, static libraries can also be foo.lib
             stlibext += ['lib']
-        elif for_cygwin(env.is_cross_build(), env):
+        elif for_cygwin(env):
             shlibext = ['dll', 'dll.a']
             prefixes = ['cyg'] + prefixes
         else:
@@ -1131,12 +1131,12 @@ class CCompiler(Compiler):
         return self.find_framework_impl(name, env, extra_dirs, allow_system)
 
     def thread_flags(self, env):
-        if for_haiku(self.is_cross, env) or for_darwin(self.is_cross, env):
+        if for_haiku(env) or for_darwin(env):
             return []
         return ['-pthread']
 
     def thread_link_flags(self, env):
-        if for_haiku(self.is_cross, env) or for_darwin(self.is_cross, env):
+        if for_haiku(env) or for_darwin(env):
             return []
         return ['-pthread']
 

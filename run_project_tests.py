@@ -125,7 +125,7 @@ def platform_fix_name(fname, compiler, env):
         canonical_compiler = compiler
 
     if '?lib' in fname:
-        if mesonlib.for_windows(env.is_cross_build(), env) and canonical_compiler == 'msvc':
+        if mesonlib.for_windows(env) and canonical_compiler == 'msvc':
             fname = re.sub(r'lib/\?lib(.*)\.', r'bin/\1.', fname)
             fname = re.sub(r'/\?lib/', r'/bin/', fname)
         elif mesonlib.for_windows(env.is_cross_build(), env):
@@ -142,7 +142,7 @@ def platform_fix_name(fname, compiler, env):
 
     if fname.endswith('?exe'):
         fname = fname[:-4]
-        if mesonlib.for_windows(env.is_cross_build(), env) or mesonlib.for_cygwin(env.is_cross_build(), env):
+        if mesonlib.for_windows(env) or mesonlib.for_cygwin(env):
             return fname + '.exe'
 
     if fname.startswith('?msvc:'):

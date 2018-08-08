@@ -759,7 +759,7 @@ class InternalTests(unittest.TestCase):
         else:
             self._test_all_naming(cc, env, patterns, 'linux')
             # Mock OpenBSD since we don't have tests for it
-            true = lambda x, y: True
+            true = lambda env: True
             if not is_openbsd():
                 with PatchModule(mesonbuild.compilers.c.for_openbsd,
                                  'mesonbuild.compilers.c.for_openbsd', true):

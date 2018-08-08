@@ -449,12 +449,11 @@ class Environment:
         # Various prefixes and suffixes for import libraries, shared libraries,
         # static libraries, and executables.
         # Versioning is added to these names in the backends as-needed.
-        cross = self.is_cross_build()
-        if mesonlib.for_windows(cross, self):
+        if mesonlib.for_windows(self):
             self.exe_suffix = 'exe'
             self.object_suffix = 'obj'
             self.win_libdir_layout = True
-        elif mesonlib.for_cygwin(cross, self):
+        elif mesonlib.for_cygwin(self):
             self.exe_suffix = 'exe'
             self.object_suffix = 'o'
             self.win_libdir_layout = True
@@ -705,9 +704,9 @@ class Environment:
                 cls = ClangClCCompiler if lang == 'c' else ClangClCPPCompiler
                 return cls(compiler, version, is_cross, exe_wrap, target)
             if 'clang' in out:
-                if 'Apple' in out or mesonlib.for_darwin(want_cross, self):
+                if 'Apple' in out or mesonlib.for_darwin(self):
                     compiler_type = CompilerType.CLANG_OSX
-                elif 'windows' in out or mesonlib.for_windows(want_cross, self):
+                elif 'windows' in out or mesonlib.for_windows(self):
                     compiler_type = CompilerType.CLANG_MINGW
                 else:
                     compiler_type = CompilerType.CLANG_STANDARD
