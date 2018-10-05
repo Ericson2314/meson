@@ -292,7 +292,7 @@ class MPIDependency(ExternalDependency):
         if 'MSMPI_INC' not in os.environ:
             return
         incdir = os.environ['MSMPI_INC']
-        arch = detect_cpu_family(self.env.coredata.compilers)
+        arch = detect_cpu_family(self.env.coredata.compilers.host)
         if arch == 'x86':
             if 'MSMPI_LIB32' not in os.environ:
                 return
@@ -365,7 +365,7 @@ class Python3Dependency(ExternalDependency):
     def __init__(self, environment, kwargs):
         super().__init__('python3', environment, None, kwargs)
 
-        if self.want_cross:
+        if environment.machines.matches_build_machine(self.for_machine):
             return
 
         self.name = 'python3'
@@ -445,7 +445,7 @@ class Python3Dependency(ExternalDependency):
         if pyarch is None:
             self.is_found = False
             return
-        arch = detect_cpu_family(env.coredata.compilers)
+        arch = detect_cpu_family(env.coredata.compilers.host)
         if arch == 'x86':
             arch = '32'
         elif arch == 'x86_64':
@@ -525,7 +525,7 @@ class PcapDependency(ExternalDependency):
     def get_pcap_lib_version(ctdep):
         # Since we seem to need to run a program to discover the pcap version,
         # we can't do that when cross-compiling
-        if ctdep.want_cross:
+        if ctdep.env.machines.matches_build_machine(ctdep.for_machine):
             return None
 
         v = ctdep.clib_compiler.get_return_value('pcap_lib_version', 'string',

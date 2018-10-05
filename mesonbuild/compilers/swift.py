@@ -14,7 +14,7 @@
 
 import subprocess, os.path
 
-from ..mesonlib import EnvironmentException
+from ..mesonlib import EnvironmentException, MachineChoice
 
 from .compilers import Compiler, swift_buildtype_args, clike_debug_args
 
@@ -27,12 +27,12 @@ swift_optimization_args = {'0': [],
                            }
 
 class SwiftCompiler(Compiler):
-    def __init__(self, exelist, version):
+    def __init__(self, exelist, version, for_machine: MachineChoice):
         self.language = 'swift'
-        super().__init__(exelist, version)
+        super().__init__(exelist, version, for_machine)
         self.version = version
         self.id = 'llvm'
-        self.is_cross = False
+        assert for_machine <= MachineChoice.HOST
 
     def get_linker_exelist(self):
         return self.exelist[:]

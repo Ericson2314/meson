@@ -26,8 +26,7 @@ from .. import coredata
 from . import compilers
 from ..mesonlib import (
     EnvironmentException, MachineChoice, MesonException, Popen_safe, listify,
-    version_compare, for_windows, for_darwin, for_cygwin, for_haiku,
-    for_openbsd, darwin_get_object_archs
+    version_compare, darwin_get_object_archs
 )
 from .c_function_attributes import C_FUNC_ATTRIBUTES
 
@@ -70,11 +69,11 @@ class CCompiler(Compiler):
         except KeyError:
             raise MesonException('Unknown function attribute "{}"'.format(name))
 
-    def __init__(self, exelist, version, is_cross, exe_wrapper=None, **kwargs):
+    def __init__(self, exelist, version, for_machine: MachineChoice, is_cross, exe_wrapper=None, **kwargs):
         # If a child ObjC or CPP class has already set it, don't set it ourselves
         if not hasattr(self, 'language'):
             self.language = 'c'
-        super().__init__(exelist, version, **kwargs)
+        super().__init__(exelist, version, for_machine, **kwargs)
         self.id = 'unknown'
         self.is_cross = is_cross
         self.can_compile_suffixes.add('h')
@@ -291,9 +290,10 @@ class CCompiler(Compiler):
         return []
 
     def gen_export_dynamic_link_args(self, env):
-        if for_windows(env) or for_cygwin(env):
+        m = env.machines[self.for_machine]
+        if m.is_windows(env) or m.is_cygwin():
             return ['-Wl,--export-all-symbols']
-        elif for_darwin(env):
+        elif env.machines[self.for_machine].is_darwin():
             return []
         else:
             return ['-Wl,-export-dynamic']
@@ -421,16 +421,12 @@ class CCompiler(Compiler):
         # Select a CRT if needed since we're linking
         if mode == 'link':
             args += self.get_linker_debug_crt_args()
-        if env.is_cross_build() and not self.is_cross:
-            for_machine = MachineChoice.BUILD
-        else:
-            for_machine = MachineChoice.HOST
         if mode == 'preprocess':
             # Add CPPFLAGS from the env.
-            args += env.coredata.get_external_preprocess_args(for_machine, self.language)
+            args += env.coredata.get_external_preprocess_args(self.for_machine, self.language)
         elif mode == 'compile':
             # Add CFLAGS/CXXFLAGS/OBJCFLAGS/OBJCXXFLAGS from the env
-            sys_args = env.coredata.get_external_args(for_machine, self.language)
+            sys_args = env.coredata.get_external_args(self.for_machine, self.language)
             # Apparently it is a thing to inject linker flags both
             # via CFLAGS _and_ LDFLAGS, even though the former are
             # also used during linking. These flags can break
@@ -439,7 +435,7 @@ class CCompiler(Compiler):
             args += cleaned_sys_args
         elif mode == 'link':
             # Add LDFLAGS from the env
-            args += env.coredata.get_external_link_args(for_machine, self.language)
+            args += env.coredata.get_external_link_args(self.for_machine, self.language)
         args += self.get_compiler_check_args()
         # extra_args must override all other arguments, so we add them last
         args += extra_args
@@ -894,7 +890,7 @@ class CCompiler(Compiler):
         for p in prefixes:
             for s in suffixes:
                 patterns.append(p + '{}.' + s)
-        if shared and for_openbsd(env):
+        if shared and env.machines[self.for_machine].is_openbsd():
             # Shared libraries on OpenBSD can be named libfoo.so.X.Y:
             # https://www.openbsd.org/faq/ports/specialtopics.html#SharedLibs
             #
@@ -918,9 +914,9 @@ class CCompiler(Compiler):
         else:
             prefixes = ['lib', '']
         # Library suffixes and prefixes
-        if for_darwin(env):
+        if env.machines[self.for_machine].is_darwin():
             shlibext = ['dylib', 'so']
-        elif for_windows(env):
+        elif env.machines[self.for_machine].is_windows():
             # FIXME: .lib files can be import or static so we should read the
             # file, figure out which one it is, and reject the wrong kind.
             if isinstance(self, VisualStudioCCompiler):
@@ -929,7 +925,7 @@ class CCompiler(Compiler):
                 shlibext = ['dll.a', 'lib', 'dll']
             # Yep, static libraries can also be foo.lib
             stlibext += ['lib']
-        elif for_cygwin(env):
+        elif env.machines[self.for_machine].is_cygwin():
             shlibext = ['dll', 'dll.a']
             prefixes = ['cyg'] + prefixes
         else:
@@ -1078,11 +1074,7 @@ class CCompiler(Compiler):
         commands = self.get_exelist() + ['-v', '-E', '-']
         commands += self.get_always_args()
         # Add CFLAGS/CXXFLAGS/OBJCFLAGS/OBJCXXFLAGS from the env
-        if env.is_cross_build() and not self.is_cross:
-            for_machine = MachineChoice.BUILD
-        else:
-            for_machine = MachineChoice.HOST
-        commands += env.coredata.get_external_args(for_machine, self.language)
+        commands += env.coredata.get_external_args(self.for_machine, self.language)
         mlog.debug('Finding framework path by running: ', ' '.join(commands), '\n')
         os_env = os.environ.copy()
         os_env['LC_ALL'] = 'C'
@@ -1131,12 +1123,14 @@ class CCompiler(Compiler):
         return self.find_framework_impl(name, env, extra_dirs, allow_system)
 
     def thread_flags(self, env):
-        if for_haiku(env) or for_darwin(env):
+        host_m = env.machines[self.for_machine]
+        if host_m.is_haiku() or host_m.is_darwin():
             return []
         return ['-pthread']
 
     def thread_link_flags(self, env):
-        if for_haiku(env) or for_darwin(env):
+        host_m = env.machines[self.for_machine]
+        if host_m.is_haiku() or host_m.is_darwin():
             return []
         return ['-pthread']
 
@@ -1194,8 +1188,8 @@ class CCompiler(Compiler):
     def has_func_attribute(self, name, env):
         # Just assume that if we're not on windows that dllimport and dllexport
         # don't work
-        if not (for_windows(env.is_cross_build(), env) or
-                for_cygwin(env.is_cross_build(), env)):
+        m = env.machines[self.for_machine]
+        if not (m.is_windows() or m.is_cygwin()):
             if name in ['dllimport', 'dllexport']:
                 return False
 
@@ -1205,8 +1199,8 @@ class CCompiler(Compiler):
 
 
 class ClangCCompiler(ClangCompiler, CCompiler):
-    def __init__(self, exelist, version, compiler_type, is_cross, exe_wrapper=None, **kwargs):
-        CCompiler.__init__(self, exelist, version, is_cross, exe_wrapper, **kwargs)
+    def __init__(self, exelist, version, compiler_type, for_machine: MachineChoice, is_cross, exe_wrapper=None, **kwargs):
+        CCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper, **kwargs)
         ClangCompiler.__init__(self, compiler_type)
         default_warn_args = ['-Wall', '-Winvalid-pch']
         self.warn_args = {'0': [],
@@ -1240,8 +1234,8 @@ class ClangCCompiler(ClangCompiler, CCompiler):
 
 
 class ArmclangCCompiler(ArmclangCompiler, CCompiler):
-    def __init__(self, exelist, version, compiler_type, is_cross, exe_wrapper=None, **kwargs):
-        CCompiler.__init__(self, exelist, version, is_cross, exe_wrapper, **kwargs)
+    def __init__(self, exelist, version, compiler_type, for_machine: MachineChoice, is_cross, exe_wrapper=None, **kwargs):
+        CCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper, **kwargs)
         ArmclangCompiler.__init__(self, compiler_type)
         default_warn_args = ['-Wall', '-Winvalid-pch']
         self.warn_args = {'0': [],
@@ -1269,8 +1263,8 @@ class ArmclangCCompiler(ArmclangCompiler, CCompiler):
 
 
 class GnuCCompiler(GnuCompiler, CCompiler):
-    def __init__(self, exelist, version, compiler_type, is_cross, exe_wrapper=None, defines=None, **kwargs):
-        CCompiler.__init__(self, exelist, version, is_cross, exe_wrapper, **kwargs)
+    def __init__(self, exelist, version, compiler_type, for_machine: MachineChoice, is_cross, exe_wrapper=None, defines=None, **kwargs):
+        CCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper, **kwargs)
         GnuCompiler.__init__(self, compiler_type, defines)
         default_warn_args = ['-Wall', '-Winvalid-pch']
         self.warn_args = {'0': [],
@@ -1307,14 +1301,14 @@ class GnuCCompiler(GnuCompiler, CCompiler):
 
 
 class PGICCompiler(PGICompiler, CCompiler):
-    def __init__(self, exelist, version, is_cross, exe_wrapper=None, **kwargs):
-        CCompiler.__init__(self, exelist, version, is_cross, exe_wrapper, **kwargs)
+    def __init__(self, exelist, version, for_machine: MachineChoice, is_cross, exe_wrapper=None, **kwargs):
+        CCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper, **kwargs)
         PGICompiler.__init__(self, CompilerType.PGI_STANDARD)
 
 
 class ElbrusCCompiler(GnuCCompiler, ElbrusCompiler):
-    def __init__(self, exelist, version, compiler_type, is_cross, exe_wrapper=None, defines=None, **kwargs):
-        GnuCCompiler.__init__(self, exelist, version, compiler_type, is_cross, exe_wrapper, defines, **kwargs)
+    def __init__(self, exelist, version, compiler_type, for_machine: MachineChoice, is_cross, exe_wrapper=None, defines=None, **kwargs):
+        GnuCCompiler.__init__(self, exelist, version, compiler_type, for_machine, is_cross, exe_wrapper, defines, **kwargs)
         ElbrusCompiler.__init__(self, compiler_type, defines)
 
     # It does support some various ISO standards and c/gnu 90, 9x, 1x in addition to those which GNU CC supports.
@@ -1339,8 +1333,8 @@ class ElbrusCCompiler(GnuCCompiler, ElbrusCompiler):
 
 
 class IntelCCompiler(IntelCompiler, CCompiler):
-    def __init__(self, exelist, version, compiler_type, is_cross, exe_wrapper=None, **kwargs):
-        CCompiler.__init__(self, exelist, version, is_cross, exe_wrapper, **kwargs)
+    def __init__(self, exelist, version, compiler_type, for_machine: MachineChoice, is_cross, exe_wrapper=None, **kwargs):
+        CCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper, **kwargs)
         IntelCompiler.__init__(self, compiler_type)
         self.lang_header = 'c-header'
         default_warn_args = ['-Wall', '-w3', '-diag-disable:remark']
@@ -1381,8 +1375,8 @@ class VisualStudioCCompiler(CCompiler):
                 'mtd': ['/MTd'],
                 }
 
-    def __init__(self, exelist, version, is_cross, exe_wrap, target):
-        CCompiler.__init__(self, exelist, version, is_cross, exe_wrap)
+    def __init__(self, exelist, version, for_machine: MachineChoice, is_cross, exe_wrap, target):
+        CCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrap)
         self.id = 'msvc'
         # /showIncludes is needed for build dependency tracking in Ninja
         # See: https://ninja-build.org/manual.html#_deps
@@ -1690,14 +1684,14 @@ class VisualStudioCCompiler(CCompiler):
 
 
 class ClangClCCompiler(VisualStudioCCompiler):
-    def __init__(self, exelist, version, is_cross, exe_wrap, target):
-        super().__init__(exelist, version, is_cross, exe_wrap, target)
+    def __init__(self, exelist, version, for_machine: MachineChoice, is_cross, exe_wrap, target):
+        super().__init__(exelist, version, for_machine, is_cross, exe_wrap, target)
         self.id = 'clang-cl'
 
 
 class ArmCCompiler(ArmCompiler, CCompiler):
-    def __init__(self, exelist, version, compiler_type, is_cross, exe_wrapper=None, **kwargs):
-        CCompiler.__init__(self, exelist, version, is_cross, exe_wrapper, **kwargs)
+    def __init__(self, exelist, version, compiler_type, for_machine: MachineChoice, is_cross, exe_wrapper=None, **kwargs):
+        CCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper, **kwargs)
         ArmCompiler.__init__(self, compiler_type)
 
     def get_options(self):
@@ -1715,8 +1709,8 @@ class ArmCCompiler(ArmCompiler, CCompiler):
         return args
 
 class CcrxCCompiler(CcrxCompiler, CCompiler):
-    def __init__(self, exelist, version, compiler_type, is_cross, exe_wrapper=None, **kwargs):
-        CCompiler.__init__(self, exelist, version, is_cross, exe_wrapper, **kwargs)
+    def __init__(self, exelist, version, compiler_type, for_machine: MachineChoice, is_cross, exe_wrapper=None, **kwargs):
+        CCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper, **kwargs)
         CcrxCompiler.__init__(self, compiler_type)
 
     # Override CCompiler.get_always_args

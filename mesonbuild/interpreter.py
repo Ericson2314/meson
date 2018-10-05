@@ -21,7 +21,7 @@ from . import optinterpreter
 from . import compilers
 from .wrap import wrap, WrapMode
 from . import mesonlib
-from .mesonlib import FileMode, MachineChoice, Popen_safe, listify, extract_as_list, has_path_sep
+from .mesonlib import FileMode, MachineChoice, PerMachine, Popen_safe, listify, extract_as_list, has_path_sep
 from .dependencies import ExternalProgram
 from .dependencies import InternalDependency, Dependency, NotFoundDependency, DependencyException
 from .interpreterbase import InterpreterBase
@@ -713,7 +713,7 @@ class BuildTargetHolder(TargetHolder):
         return r.format(self.__class__.__name__, h.get_id(), h.filename)
 
     def is_cross(self):
-        return self.held_object.is_cross()
+        return not self.held_object.environment.machines.matches_build_machine(self.held_object.for_machine)
 
     @noPosargs
     @permittedKwargs({})
@@ -1639,13 +1639,19 @@ class ModuleHolder(InterpreterObject, ObjectHolder):
             # The backend object is under-used right now, but we will need it:
             # https://github.com/mesonbuild/meson/issues/1419
             backend=self.interpreter.backend,
-            compilers=self.interpreter.build.compilers,
+            #compilers_for_build = self.interpreter.build.compilers.build,
+            compilers = self.interpreter.build.compilers.host,
+            #compilers_for_target = self.interpreter.build.compilers.target,
             targets=self.interpreter.build.targets,
             data=self.interpreter.build.data,
             headers=self.interpreter.build.get_headers(),
             man=self.interpreter.build.get_man(),
-            global_args=self.interpreter.build.global_args,
-            project_args=self.interpreter.build.projects_args.get(self.interpreter.subproject, {}),
+            #global_args_for_build = self.interpreter.build.global_args.build,
+            global_args = self.interpreter.build.global_args.host,
+            #global_args_for_target = self.interpreter.build.global_args.target,
+            #project_args_for_build = self.interpreter.build.projects_args.build.get(self.interpreter.subproject, {}),
+            project_args = self.interpreter.build.projects_args.host.get(self.interpreter.subproject, {}),
+            #project_args_for_target = self.interpreter.build.projects_args.target.get(self.interpreter.subproject, {}),
             build_machine=self.interpreter.builtin['build_machine'].held_object,
             host_machine=self.interpreter.builtin['host_machine'].held_object,
             target_machine=self.interpreter.builtin['target_machine'].held_object,
@@ -1795,10 +1801,7 @@ class MesonMain(InterpreterObject):
                 native = True
         if not isinstance(native, bool):
             raise InterpreterException('Type of "native" must be a boolean.')
-        if native:
-            clist = self.build.compilers
-        else:
-            clist = self.build.cross_compilers
+        clist = self.build.compilers[MachineChoice.BUILD if native else MachineChoice.HOST]
         if cname in clist:
             return CompilerHolder(clist[cname], self.build.environment, self.interpreter.subproject)
         raise InterpreterException('Tried to access compiler for unspecified language "%s".' % cname)
@@ -2174,10 +2177,10 @@ class Interpreter(InterpreterBase):
     def get_variables(self):
         return self.variables
 
-    def check_cross_stdlibs(self):
-        if self.build.environment.is_cross_build():
-            props = self.build.environment.properties.host
-            for l, c in self.build.cross_compilers.items():
+    def check_stdlibs(self):
+        for for_machine in list(MachineChoice):
+            props = self.build.environment.properties[for_machine]
+            for l, c in self.build.compilers[for_machine].items():
                 try:
                     di = mesonlib.stringlistify(props.get_stdlib(l))
                     if len(di) != 2:
@@ -2185,7 +2188,7 @@ class Interpreter(InterpreterBase):
                                                    % l)
                     projname, depname = di
                     subproj = self.do_subproject(projname, {})
-                    self.build.cross_stdlibs[l] = subproj.get_variable_method([depname], {})
+                    self.build.stdlibs.host[l] = subproj.get_variable_method([depname], {})
                 except KeyError:
                     pass
                 except InvalidArguments:
@@ -2613,12 +2616,13 @@ external dependencies (including libraries) must go to "dependencies".''')
         mlog.log('Project name:', mlog.bold(proj_name))
         mlog.log('Project version:', mlog.bold(self.project_version))
         self.add_languages(proj_langs, True)
-        langs = self.coredata.compilers.keys()
+        # TODO don't hard-code host
+        langs = self.coredata.compilers.host.keys()
         if 'vala' in langs:
             if 'c' not in langs:
                 raise InterpreterException('Compiling Vala requires C. Add C to your project languages and rerun Meson.')
         if not self.is_subproject():
-            self.check_cross_stdlibs()
+            self.check_stdlibs()
 
     @permittedKwargs(permitted_kwargs['add_languages'])
     @stringArgs
@@ -2675,20 +2679,26 @@ external dependencies (including libraries) must go to "dependencies".''')
         raise Exception()
 
     def add_languages(self, args, required):
+        return self.add_languages_for(args, required, MachineChoice.BUILD), \
+            self.add_languages_for(args, required, MachineChoice.HOST)
+
+    def add_languages_for(self, args, required, for_machine: MachineChoice):
         success = True
-        need_cross_compiler = self.environment.is_cross_build()
         for lang in sorted(args, key=compilers.sort_clink):
             lang = lang.lower()
-            if lang in self.coredata.compilers:
-                comp = self.coredata.compilers[lang]
-                cross_comp = self.coredata.cross_compilers.get(lang, None)
+            clist = self.coredata.compilers[for_machine]
+            machine_name = PerMachine('build', 'host', 'target')[for_machine]
+            if lang in clist:
+                comp = clist[lang]
             else:
                 try:
-                    (comp, cross_comp) = self.environment.detect_compilers(lang, need_cross_compiler)
-                    self.environment.check_compilers(lang, comp, cross_comp)
+                    comp = self.environment.detect_compiler_for(lang, for_machine)
+                    self.environment.check_compiler(lang, comp)
                 except Exception:
                     if not required:
-                        mlog.log('Compiler for language', mlog.bold(lang), 'not found.')
+                        mlog.log('Compiler for language',
+                                 mlog.bold(lang), 'for the', machine_name,
+                                 'machine not found.')
                         success = False
                         continue
                     else:
@@ -2697,14 +2707,9 @@ external dependencies (including libraries) must go to "dependencies".''')
                 version_string = '(%s %s "%s")' % (comp.id, comp.version, comp.full_version)
             else:
                 version_string = '(%s %s)' % (comp.id, comp.version)
-            mlog.log('Native', comp.get_display_language(), 'compiler:',
+            mlog.log(comp.get_display_language(), 'compiler for the', machine_name, 'machine:',
                      mlog.bold(' '.join(comp.get_exelist())), version_string)
             self.build.ensure_static_linker(comp)
-            if need_cross_compiler:
-                version_string = '(%s %s)' % (cross_comp.id, cross_comp.version)
-                mlog.log('Cross', cross_comp.get_display_language(), 'compiler:',
-                         mlog.bold(' '.join(cross_comp.get_exelist())), version_string)
-                self.build.ensure_static_cross_linker(cross_comp)
         return success
 
     def program_from_file_for(self, for_machine, prognames, silent):
@@ -2816,17 +2821,11 @@ external dependencies (including libraries) must go to "dependencies".''')
                           )
 
     def _find_cached_dep(self, name, kwargs):
-        # Check if we want this as a cross-dep or a native-dep
-        # FIXME: Not all dependencies support such a distinction right now,
-        # and we repeat this check inside dependencies that do. We need to
-        # consolidate this somehow.
-        is_cross = self.environment.is_cross_build()
-        if 'native' in kwargs and is_cross:
-            want_cross = not kwargs['native']
-        else:
-            want_cross = is_cross
+        # Check if we want this as a build-time / build machine or runt-time /
+        # host machine dep.
+        for_machine = MachineChoice.BUILD if kwargs.get('native', False) else MachineChoice.HOST
 
-        identifier = dependencies.get_dep_identifier(name, kwargs, want_cross)
+        identifier = dependencies.get_dep_identifier(name, kwargs, for_machine)
         cached_dep = self.coredata.deps.get(identifier)
         if cached_dep:
             if not cached_dep.found():
@@ -3716,44 +3715,34 @@ different subdirectory.
                                                              timeout_multiplier=timeout_multiplier,
                                                              env=env)
 
-    def get_argdict_on_crossness(self, native_dict, cross_dict, kwargs):
-        for_native = kwargs.get('native', not self.environment.is_cross_build())
+    def get_argdict_on_crossness(self, dicts_per_machine: PerMachine, kwargs):
+        for_native = kwargs.get('native', False)
         if not isinstance(for_native, bool):
             raise InterpreterException('Keyword native must be a boolean.')
-        if for_native:
-            return native_dict
-        else:
-            return cross_dict
+        return dicts_per_machine[MachineChoice.BUILD if for_native else MachineChoice.HOST]
 
     @permittedKwargs(permitted_kwargs['add_global_arguments'])
     @stringArgs
     def func_add_global_arguments(self, node, args, kwargs):
-        argdict = self.get_argdict_on_crossness(self.build.global_args,
-                                                self.build.cross_global_args,
-                                                kwargs)
+        argdict = self.get_argdict_on_crossness(self.build.global_args, kwargs)
         self.add_global_arguments(node, argdict, args, kwargs)
 
     @permittedKwargs(permitted_kwargs['add_global_link_arguments'])
     @stringArgs
     def func_add_global_link_arguments(self, node, args, kwargs):
-        argdict = self.get_argdict_on_crossness(self.build.global_link_args,
-                                                self.build.cross_global_link_args,
-                                                kwargs)
+        argdict = self.get_argdict_on_crossness(self.build.global_link_args, kwargs)
         self.add_global_arguments(node, argdict, args, kwargs)
 
     @permittedKwargs(permitted_kwargs['add_project_arguments'])
     @stringArgs
     def func_add_project_arguments(self, node, args, kwargs):
-        argdict = self.get_argdict_on_crossness(self.build.projects_args,
-                                                self.build.cross_projects_args,
-                                                kwargs)
+        argdict = self.get_argdict_on_crossness(self.build.projects_args, kwargs)
         self.add_project_arguments(node, argdict, args, kwargs)
 
     @permittedKwargs(permitted_kwargs['add_project_link_arguments'])
     @stringArgs
     def func_add_project_link_arguments(self, node, args, kwargs):
-        argdict = self.get_argdict_on_crossness(self.build.projects_link_args,
-                                                self.build.cross_projects_link_args, kwargs)
+        argdict = self.get_argdict_on_crossness(self.build.projects_link_args, kwargs)
         self.add_project_arguments(node, argdict, args, kwargs)
 
     def add_global_arguments(self, node, argsdict, args, kwargs):
@@ -3807,7 +3796,8 @@ different subdirectory.
             self.print_extra_warnings()
 
     def print_extra_warnings(self):
-        for c in self.build.compilers.values():
+        # TODO cross compilation
+        for c in self.build.compilers.host.values():
             if c.get_id() == 'clang':
                 self.check_clang_asan_lundef()
                 break
@@ -3959,13 +3949,10 @@ Try setting b_lundef to false instead.'''.format(self.coredata.base_options['b_s
             raise InterpreterException('Target does not have a name.')
         name = args[0]
         sources = listify(args[1:])
-        if self.environment.is_cross_build():
-            if kwargs.get('native', False):
-                is_cross = False
-            else:
-                is_cross = True
+        if kwargs.get('native', False):
+            for_machine = MachineChoice.BUILD
         else:
-            is_cross = False
+            for_machine = MachineChoice.HOST
         if 'sources' in kwargs:
             sources += listify(kwargs['sources'])
         sources = self.source_strings_to_files(sources)
@@ -3996,9 +3983,9 @@ Try setting b_lundef to false instead.'''.format(self.coredata.base_options['b_s
         kwargs = {k: v for k, v in kwargs.items() if k in targetclass.known_kwargs}
 
         kwargs['include_directories'] = self.extract_incdirs(kwargs)
-        target = targetclass(name, self.subdir, self.subproject, is_cross, sources, objs, self.environment, kwargs)
+        target = targetclass(name, self.subdir, self.subproject, for_machine, sources, objs, self.environment, kwargs)
 
-        if is_cross:
+        if not self.environment.machines.matches_build_machine(for_machine):
             self.add_cross_stdlib_info(target)
         l = targetholder(target, self)
         self.add_target(name, l.held_object)
@@ -4025,18 +4012,21 @@ This will become a hard error in the future.''', location=self.current_node)
     def get_used_languages(self, target):
         result = {}
         for i in target.sources:
-            for lang, c in self.build.compilers.items():
+            # TODO other platforms
+            for lang, c in self.build.compilers.host.items():
                 if c.can_compile(i):
                     result[lang] = True
                     break
         return result
 
     def add_cross_stdlib_info(self, target):
+        if target.for_machine != MachineChoice.HOST:
+            return
         for l in self.get_used_languages(target):
             props = self.environment.properties.host
             if props.has_stdlib(l) \
                     and self.subproject != props.get_stdlib(l)[0]:
-                target.add_deps(self.build.cross_stdlibs[l])
+                target.add_deps(self.build.stdlibs.host[l])
 
     def check_sources_exist(self, subdir, sources):
         for s in sources:

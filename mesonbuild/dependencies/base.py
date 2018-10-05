@@ -234,18 +234,12 @@ class ExternalDependency(Dependency):
         self.static = kwargs.get('static', False)
         if not isinstance(self.static, bool):
             raise DependencyException('Static keyword must be boolean')
-        # Is this dependency for cross-compilation?
-        if 'native' in kwargs and self.env.is_cross_build():
-            self.want_cross = not kwargs['native']
-        else:
-            self.want_cross = self.env.is_cross_build()
+        # Is this dependency to be run on the build platform?
+        self.for_machine = MachineChoice.BUILD if kwargs.get('native', False) else MachineChoice.HOST
         self.clib_compiler = None
         # Set the compiler that will be used by this dependency
         # This is only used for configuration checks
-        if self.want_cross:
-            compilers = self.env.coredata.cross_compilers
-        else:
-            compilers = self.env.coredata.compilers
+        compilers = self.env.coredata.compilers[self.for_machine]
         # Set the compiler for this dependency if a language is specified,
         # else try to pick something that looks usable.
         if self.language:
@@ -505,18 +499,13 @@ class PkgConfigDependency(ExternalDependency):
         # stored in the pickled coredata and recovered.
         self.pkgbin = None
 
-        if not self.want_cross and environment.is_cross_build():
-            for_machine = MachineChoice.BUILD
-        else:
-            for_machine = MachineChoice.HOST
-
         # Create an iterator of options
         def search():
             # Lookup in cross or machine file.
-            potential_pkgpath = environment.binaries[for_machine].lookup_entry('pkgconfig')
+            potential_pkgpath = environment.binaries[self.for_machine].lookup_entry('pkgconfig')
             if potential_pkgpath is not None:
                 mlog.debug('Pkg-config binary for {} specified from cross file, native file, '
-                           'or env var as {}'.format(for_machine, potential_pkgpath))
+                           'or env var as {}'.format(self.for_machine, potential_pkgpath))
                 yield ExternalProgram.from_entry('pkgconfig', potential_pkgpath)
                 # We never fallback if the user-specified option is no good, so
                 # stop returning options.
@@ -524,42 +513,42 @@ class PkgConfigDependency(ExternalDependency):
             mlog.debug('Pkg-config binary missing from cross or native file, or env var undefined.')
             # Fallback on hard-coded defaults.
             # TODO prefix this for the cross case instead of ignoring thing.
-            if environment.machines.matches_build_machine(for_machine):
+            if environment.machines.matches_build_machine(self.for_machine):
                 for potential_pkgpath in environment.default_pkgconfig:
                     mlog.debug('Trying a default pkg-config fallback at', potential_pkgpath)
                     yield ExternalProgram(potential_pkgpath, silent=True)
 
         # Only search for pkg-config for each machine the first time and store
         # the result in the class definition
-        if PkgConfigDependency.class_pkgbin[for_machine] is False:
-            mlog.debug('Pkg-config binary for %s is cached as not found.' % for_machine)
-        elif PkgConfigDependency.class_pkgbin[for_machine] is not None:
-            mlog.debug('Pkg-config binary for %s is cached.' % for_machine)
+        if PkgConfigDependency.class_pkgbin[self.for_machine] is False:
+            mlog.debug('Pkg-config binary for %s is cached as not found.' % self.for_machine)
+        elif PkgConfigDependency.class_pkgbin[self.for_machine] is not None:
+            mlog.debug('Pkg-config binary for %s is cached.' % self.for_machine)
         else:
-            assert PkgConfigDependency.class_pkgbin[for_machine] is None
-            mlog.debug('Pkg-config binary for %s is not cached.' % for_machine)
+            assert PkgConfigDependency.class_pkgbin[self.for_machine] is None
+            mlog.debug('Pkg-config binary for %s is not cached.' % self.for_machine)
             for potential_pkgbin in search():
                 mlog.debug('Trying pkg-config binary {} for machine {} at {}'
-                           .format(potential_pkgbin.name, for_machine, potential_pkgbin.command))
+                           .format(potential_pkgbin.name, self.for_machine, potential_pkgbin.command))
                 version_if_ok = self.check_pkgconfig(potential_pkgbin)
                 if not version_if_ok:
                     continue
                 if not self.silent:
                     mlog.log('Found pkg-config:', mlog.bold(potential_pkgbin.get_path()),
                              '(%s)' % version_if_ok)
-                PkgConfigDependency.class_pkgbin[for_machine] = potential_pkgbin
+                PkgConfigDependency.class_pkgbin[self.for_machine] = potential_pkgbin
                 break
             else:
                 if not self.silent:
                     mlog.log('Found Pkg-config:', mlog.red('NO'))
                 # Set to False instead of None to signify that we've already
                 # searched for it and not found it
-                PkgConfigDependency.class_pkgbin[for_machine] = False
+                PkgConfigDependency.class_pkgbin[self.for_machine] = False
 
-        self.pkgbin = PkgConfigDependency.class_pkgbin[for_machine]
+        self.pkgbin = PkgConfigDependency.class_pkgbin[self.for_machine]
         if self.pkgbin is False:
             self.pkgbin = None
-            msg = 'Pkg-config binary for machine %s not found. Giving up.' % for_machine
+            msg = 'Pkg-config binary for machine %s not found. Giving up.' % self.for_machine
             if self.required:
                 raise DependencyException(msg)
             else:
@@ -944,20 +933,12 @@ class CMakeDependency(ExternalDependency):
         # Where all CMake "build dirs" are located
         self.cmake_root_dir = environment.scratch_dir
 
-        # When finding dependencies for cross-compiling, we don't care about
-        # the 'native' CMake binary
-        # TODO: Test if this works as expected
-        if environment.is_cross_build() and not self.want_cross:
-            for_machine = MachineChoice.BUILD
-        else:
-            for_machine = MachineChoice.HOST
-
         # Create an iterator of options
         def search():
             # Lookup in cross or machine file.
-            potential_cmakepath = environment.binaries[for_machine].lookup_entry('cmake')
+            potential_cmakepath = environment.binaries[self.for_machine].lookup_entry('cmake')
             if potential_cmakepath is not None:
-                mlog.debug('CMake binary for %s specified from cross file, native file, or env var as %s.', for_machine, potential_cmakepath)
+                mlog.debug('CMake binary for %s specified from cross file, native file, or env var as %s.', self.for_machine, potential_cmakepath)
                 yield ExternalProgram.from_entry('cmake', potential_cmakepath)
                 # We never fallback if the user-specified option is no good, so
                 # stop returning options.
@@ -965,45 +946,45 @@ class CMakeDependency(ExternalDependency):
             mlog.debug('CMake binary missing from cross or native file, or env var undefined.')
             # Fallback on hard-coded defaults.
             # TODO prefix this for the cross case instead of ignoring thing.
-            if environment.machines.matches_build_machine(for_machine):
+            if environment.machines.matches_build_machine(self.for_machine):
                 for potential_cmakepath in environment.default_cmake:
                     mlog.debug('Trying a default CMake fallback at', potential_cmakepath)
                     yield ExternalProgram(potential_cmakepath, silent=True)
 
         # Only search for CMake the first time and store the result in the class
         # definition
-        if CMakeDependency.class_cmakebin[for_machine] is False:
-            mlog.debug('CMake binary for %s is cached as not found' % for_machine)
-        elif CMakeDependency.class_cmakebin[for_machine] is not None:
-            mlog.debug('CMake binary for %s is cached.' % for_machine)
+        if CMakeDependency.class_cmakebin[self.for_machine] is False:
+            mlog.debug('CMake binary for %s is cached as not found' % self.for_machine)
+        elif CMakeDependency.class_cmakebin[self.for_machine] is not None:
+            mlog.debug('CMake binary for %s is cached.' % self.for_machine)
         else:
-            assert CMakeDependency.class_cmakebin[for_machine] is None
-            mlog.debug('CMake binary for %s is not cached' % for_machine)
+            assert CMakeDependency.class_cmakebin[self.for_machine] is None
+            mlog.debug('CMake binary for %s is not cached' % self.for_machine)
             for potential_cmakebin in search():
                 mlog.debug('Trying CMake binary {} for machine {} at {}'
-                           .format(potential_cmakebin.name, for_machine, potential_cmakebin.command))
+                           .format(potential_cmakebin.name, self.for_machine, potential_cmakebin.command))
                 version_if_ok = self.check_cmake(potential_cmakebin)
                 if not version_if_ok:
                     continue
                 if not self.silent:
                     mlog.log('Found CMake:', mlog.bold(potential_cmakebin.get_path()),
                              '(%s)' % version_if_ok)
-                CMakeDependency.class_cmakebin[for_machine] = potential_cmakebin
-                CMakeDependency.class_cmakevers[for_machine] = version_if_ok
+                CMakeDependency.class_cmakebin[self.for_machine] = potential_cmakebin
+                CMakeDependency.class_cmakevers[self.for_machine] = version_if_ok
                 break
             else:
                 if not self.silent:
                     mlog.log('Found CMake:', mlog.red('NO'))
                 # Set to False instead of None to signify that we've already
                 # searched for it and not found it
-                CMakeDependency.class_cmakebin[for_machine] = False
-                CMakeDependency.class_cmakevers[for_machine] = None
+                CMakeDependency.class_cmakebin[self.for_machine] = False
+                CMakeDependency.class_cmakevers[self.for_machine] = None
 
-        self.cmakebin = CMakeDependency.class_cmakebin[for_machine]
-        self.cmakevers = CMakeDependency.class_cmakevers[for_machine]
+        self.cmakebin = CMakeDependency.class_cmakebin[self.for_machine]
+        self.cmakevers = CMakeDependency.class_cmakevers[self.for_machine]
         if self.cmakebin is False:
             self.cmakebin = None
-            msg = 'No CMake binary for machine %s not found. Giving up.' % for_machine
+            msg = 'No CMake binary for machine %s not found. Giving up.' % self.for_machine
             if self.required:
                 raise DependencyException(msg)
             mlog.debug(msg)
@@ -1722,6 +1703,8 @@ class DubDependency(ExternalDependency):
 
 class ExternalProgram:
     windows_exts = ('exe', 'msc', 'com', 'bat', 'cmd')
+    # An 'ExternalProgram' always runs on the build machine
+    for_machine = MachineChoice.BUILD
 
     def __init__(self, name, command=None, silent=False, search_dir=None):
         self.name = name
@@ -2083,11 +2066,11 @@ class ExtraFrameworkDependency(ExternalDependency):
         return 'framework'
 
 
-def get_dep_identifier(name, kwargs, want_cross):
-    identifier = (name, want_cross)
+def get_dep_identifier(name, kwargs, for_machine: MachineChoice):
+    identifier = (name, for_machine)
     for key, value in kwargs.items():
         # 'version' is irrelevant for caching; the caller must check version matches
-        # 'native' is handled above with `want_cross`
+        # 'native' is handled above with `for_machine`
         # 'required' is irrelevant for caching; the caller handles it separately
         # 'fallback' subprojects cannot be cached -- they must be initialized
         # 'default_options' is only used in fallback case
@@ -2127,12 +2110,9 @@ def find_external_dependency(name, env, kwargs):
     # display the dependency name with correct casing
     display_name = display_name_map.get(lname, lname)
 
-    # if this isn't a cross-build, it's uninteresting if native: is used or not
-    if not env.is_cross_build():
-        type_text = 'Dependency'
-    else:
-        type_text = 'Native' if kwargs.get('native', False) else 'Cross'
-        type_text += ' dependency'
+    for_machine = MachineChoice.BUILD if kwargs.get('native', False) else MachineChoice.HOST
+
+    type_text = PerMachine('Build-time', 'Run-time', 'Emit-time')[for_machine] + ' dependency'
 
     # build a list of dependency methods to try
     candidates = _build_external_dependency_list(name, env, kwargs)
@@ -2255,12 +2235,12 @@ def _build_external_dependency_list(name, env: Environment, kwargs: Dict[str, An
     return candidates
 
 
-def strip_system_libdirs(environment, link_args):
+def strip_system_libdirs(environment, for_machine: MachineChoice, link_args):
     """Remove -L<system path> arguments.
 
     leaving these in will break builds where a user has a version of a library
     in the system path, and a different version not in the system path if they
     want to link against the non-system path version.
     """
-    exclude = {'-L{}'.format(p) for p in environment.get_compiler_system_dirs()}
+    exclude = {'-L{}'.format(p) for p in environment.get_compiler_system_dirs(for_machine)}
     return [l for l in link_args if l not in exclude]

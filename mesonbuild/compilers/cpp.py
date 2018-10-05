@@ -17,7 +17,7 @@ import os.path
 
 from .. import coredata
 from .. import mlog
-from ..mesonlib import MesonException, version_compare
+from ..mesonlib import MesonException, MachineChoice, version_compare
 
 from .c import CCompiler, VisualStudioCCompiler, ClangClCCompiler
 from .compilers import (
@@ -41,11 +41,11 @@ class CPPCompiler(CCompiler):
     def attribute_check_func(cls, name):
         return CXX_FUNC_ATTRIBUTES.get(name, super().attribute_check_func(name))
 
-    def __init__(self, exelist, version, is_cross, exe_wrap, **kwargs):
+    def __init__(self, exelist, version, for_machine: MachineChoice, is_cross, exe_wrap, **kwargs):
         # If a child ObjCPP class has already set it, don't set it ourselves
         if not hasattr(self, 'language'):
             self.language = 'cpp'
-        CCompiler.__init__(self, exelist, version, is_cross, exe_wrap, **kwargs)
+        CCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrap, **kwargs)
 
     def get_display_language(self):
         return 'C++'
@@ -131,8 +131,8 @@ class CPPCompiler(CCompiler):
 
 
 class ClangCPPCompiler(ClangCompiler, CPPCompiler):
-    def __init__(self, exelist, version, compiler_type, is_cross, exe_wrapper=None, **kwargs):
-        CPPCompiler.__init__(self, exelist, version, is_cross, exe_wrapper, **kwargs)
+    def __init__(self, exelist, version, compiler_type, for_machine: MachineChoice, is_cross, exe_wrapper=None, **kwargs):
+        CPPCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper, **kwargs)
         ClangCompiler.__init__(self, compiler_type)
         default_warn_args = ['-Wall', '-Winvalid-pch', '-Wnon-virtual-dtor']
         self.warn_args = {'0': [],
@@ -163,8 +163,8 @@ class ClangCPPCompiler(ClangCompiler, CPPCompiler):
 
 
 class ArmclangCPPCompiler(ArmclangCompiler, CPPCompiler):
-    def __init__(self, exelist, version, compiler_type, is_cross, exe_wrapper=None, **kwargs):
-        CPPCompiler.__init__(self, exelist, version, is_cross, exe_wrapper, **kwargs)
+    def __init__(self, exelist, version, compiler_type, for_machine: MachineChoice, is_cross, exe_wrapper=None, **kwargs):
+        CPPCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper, **kwargs)
         ArmclangCompiler.__init__(self, compiler_type)
         default_warn_args = ['-Wall', '-Winvalid-pch', '-Wnon-virtual-dtor']
         self.warn_args = {'0': [],
@@ -192,8 +192,8 @@ class ArmclangCPPCompiler(ArmclangCompiler, CPPCompiler):
 
 
 class GnuCPPCompiler(GnuCompiler, CPPCompiler):
-    def __init__(self, exelist, version, compiler_type, is_cross, exe_wrap, defines, **kwargs):
-        CPPCompiler.__init__(self, exelist, version, is_cross, exe_wrap, **kwargs)
+    def __init__(self, exelist, version, compiler_type, for_machine: MachineChoice, is_cross, exe_wrap, defines, **kwargs):
+        CPPCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrap, **kwargs)
         GnuCompiler.__init__(self, compiler_type, defines)
         default_warn_args = ['-Wall', '-Winvalid-pch', '-Wnon-virtual-dtor']
         self.warn_args = {'0': [],
@@ -244,8 +244,8 @@ class PGICPPCompiler(PGICompiler, CPPCompiler):
 
 
 class ElbrusCPPCompiler(GnuCPPCompiler, ElbrusCompiler):
-    def __init__(self, exelist, version, compiler_type, is_cross, exe_wrapper=None, defines=None, **kwargs):
-        GnuCPPCompiler.__init__(self, exelist, version, compiler_type, is_cross, exe_wrapper, defines, **kwargs)
+    def __init__(self, exelist, version, compiler_type, for_machine: MachineChoice, is_cross, exe_wrapper=None, defines=None, **kwargs):
+        GnuCPPCompiler.__init__(self, exelist, version, compiler_type, for_machine, is_cross, exe_wrapper, defines, **kwargs)
         ElbrusCompiler.__init__(self, compiler_type, defines)
 
     # It does not support c++/gnu++ 17 and 1z, but still does support 0x, 1y, and gnu++98.
@@ -269,8 +269,8 @@ class ElbrusCPPCompiler(GnuCPPCompiler, ElbrusCompiler):
 
 
 class IntelCPPCompiler(IntelCompiler, CPPCompiler):
-    def __init__(self, exelist, version, compiler_type, is_cross, exe_wrap, **kwargs):
-        CPPCompiler.__init__(self, exelist, version, is_cross, exe_wrap, **kwargs)
+    def __init__(self, exelist, version, compiler_type, for_machine: MachineChoice, is_cross, exe_wrap, **kwargs):
+        CPPCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrap, **kwargs)
         IntelCompiler.__init__(self, compiler_type)
         self.lang_header = 'c++-header'
         default_warn_args = ['-Wall', '-w3', '-diag-disable:remark',
@@ -320,9 +320,9 @@ class IntelCPPCompiler(IntelCompiler, CPPCompiler):
 
 
 class VisualStudioCPPCompiler(VisualStudioCCompiler, CPPCompiler):
-    def __init__(self, exelist, version, is_cross, exe_wrap, target):
-        CPPCompiler.__init__(self, exelist, version, is_cross, exe_wrap)
-        VisualStudioCCompiler.__init__(self, exelist, version, is_cross, exe_wrap, target)
+    def __init__(self, exelist, version, for_machine: MachineChoice, is_cross, exe_wrap, target):
+        CPPCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrap)
+        VisualStudioCCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrap, target)
         self.base_options = ['b_pch', 'b_vscrt'] # FIXME add lto, pgo and the like
 
     def get_options(self):
@@ -404,8 +404,8 @@ class ClangClCPPCompiler(VisualStudioCPPCompiler, ClangClCCompiler):
         self.id = 'clang-cl'
 
 class ArmCPPCompiler(ArmCompiler, CPPCompiler):
-    def __init__(self, exelist, version, compiler_type, is_cross, exe_wrap=None, **kwargs):
-        CPPCompiler.__init__(self, exelist, version, is_cross, exe_wrap, **kwargs)
+    def __init__(self, exelist, version, compiler_type, for_machine: MachineChoice, is_cross, exe_wrap=None, **kwargs):
+        CPPCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrap, **kwargs)
         ArmCompiler.__init__(self, compiler_type)
 
     def get_options(self):

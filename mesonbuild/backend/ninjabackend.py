@@ -31,7 +31,7 @@ from .. import dependencies
 from .. import compilers
 from ..compilers import CompilerArgs, CCompiler, VisualStudioCCompiler, FortranCompiler
 from ..linkers import ArLinker
-from ..mesonlib import File, MachineChoice, MesonException, OrderedSet
+from ..mesonlib import File, MachineChoice, MesonException, OrderedSet, PerMachine
 from ..mesonlib import get_compiler_for_source, has_path_sep
 from .backends import CleanTrees
 from ..build import InvalidArguments
@@ -168,7 +168,7 @@ class NinjaBackend(backends.Backend):
     def detect_vs_dep_prefix(self, tempfilename):
         '''VS writes its dependency in a locale dependent format.
         Detect the search prefix to use.'''
-        for compiler in self.build.compilers.values():
+        for compiler in self.build.compilers.host.values():
             # Have to detect the dependency format
             if isinstance(compiler, VisualStudioCCompiler):
                 break
@@ -243,10 +243,12 @@ int dummy;
 
     # http://clang.llvm.org/docs/JSONCompilationDatabase.html
     def generate_compdb(self):
-        pch_compilers = ['%s_PCH' % i for i in self.build.compilers]
-        native_compilers = ['%s_COMPILER' % i for i in self.build.compilers]
-        cross_compilers = ['%s_CROSS_COMPILER' % i for i in self.build.cross_compilers]
-        ninja_compdb = [self.ninja_command, '-t', 'compdb'] + pch_compilers + native_compilers + cross_compilers
+        compilers_for_build = ['%s_COMPILER_FOR_BUILD' % i for i in self.build.compilers.build]
+        # TODO Precompiled header compilers for build and target machines
+        pch_compilers = ['%s_PCH' % i for i in self.build.compilers.host]
+        compilers = ['%s_COMPILER' % i for i in self.build.compilers.host]
+        compilers_for_target = ['%s_COMPILER_FOR_TARGET' % i for i in self.build.compilers.target]
+        ninja_compdb = [self.ninja_command, '-t', 'compdb'] + compilers_for_build + pch_compilers + compilers + compilers_for_target
         builddir = self.environment.get_build_dir()
         try:
             jsondb = subprocess.check_output(ninja_compdb, cwd=builddir)
@@ -585,13 +587,11 @@ int dummy;
         # the project, we need to set PATH so the DLLs are found. We use
         # a serialized executable wrapper for that and check if the
         # CustomTarget command needs extra paths first.
-        is_cross = self.environment.is_cross_build() and \
-            self.environment.need_exe_wrapper()
-        if mesonlib.for_windows(self.environment) or \
-           mesonlib.for_cygwin(self.environment):
+        if self.environment.machines[target.for_machine].is_windows() or \
+           self.environment.machines[target.for_machine].is_cygwin():
             extra_bdeps = target.get_transitive_build_target_deps()
             extra_paths = self.determine_windows_extra_paths(target.command[0],
-                                                             extra_bdeps, is_cross)
+                                                             extra_bdeps, target.for_machine)
             if extra_paths:
                 serialize = True
         if serialize:
@@ -771,9 +771,7 @@ int dummy;
   depth = %d
 
 ''' % num_pools)
-        if self.environment.is_cross_build():
-            self.generate_static_link_rules(True, outfile)
-        self.generate_static_link_rules(False, outfile)
+        self.generate_static_link_rules(outfile)
         self.generate_dynamic_link_rules(outfile)
         outfile.write('# Other rules\n\n')
         outfile.write('rule CUSTOM_COMMAND\n')
@@ -919,8 +917,8 @@ int dummy;
 
         for dep in target.get_external_deps():
             commands.extend_direct(dep.get_link_args())
-        commands += self.build.get_project_args(compiler, target.subproject, target.is_cross)
-        commands += self.build.get_global_args(compiler, target.is_cross)
+        commands += self.build.get_project_args(compiler, target.subproject, target.for_machine)
+        commands += self.build.get_global_args(compiler, target.for_machine)
 
         elem = NinjaBuildElement(self.all_outputs, outputs, 'cs_COMPILER', rel_srcs + generated_rel_srcs)
         elem.add_dep(deps)
@@ -933,8 +931,8 @@ int dummy;
     def determine_single_java_compile_args(self, target, compiler):
         args = []
         args += compiler.get_buildtype_args(self.get_option_for_target('buildtype', target))
-        args += self.build.get_global_args(compiler, target.is_cross)
-        args += self.build.get_project_args(compiler, target.subproject, target.is_cross)
+        args += self.build.get_global_args(compiler, target.for_machine)
+        args += self.build.get_project_args(compiler, target.subproject, target.for_machine)
         args += target.get_java_args()
         args += compiler.get_output_args(self.get_target_private_dir(target))
         args += target.get_classpath_args()
@@ -1240,10 +1238,7 @@ int dummy;
             # installations
             for rpath_arg in rpath_args:
                 args += ['-C', 'link-arg=' + rpath_arg + ':' + os.path.join(rustc.get_sysroot(), 'lib')]
-        crstr = ''
-        if target.is_cross:
-            crstr = '_CROSS'
-        compiler_name = 'rust%s_COMPILER' % crstr
+        compiler_name = 'rust_COMPILER' + NinjaBackend.get_crstr(target.for_machine)
         element = NinjaBuildElement(self.all_outputs, target_name, compiler_name, main_rust_file)
         if len(orderdeps) > 0:
             element.add_orderdep(orderdeps)
@@ -1254,6 +1249,10 @@ int dummy;
         if isinstance(target, build.SharedLibrary):
             self.generate_shsym(outfile, target)
         self.create_target_source_introspection(target, rustc, args, [main_rust_file], [])
+
+    @staticmethod
+    def get_crstr(for_machine: MachineChoice):
+        return PerMachine('_FOR_BUILD', '', '_FOR_TARGET')[for_machine]
 
     def swift_module_file_name(self, target):
         return os.path.join(self.get_target_private_dir(target),
@@ -1323,8 +1322,8 @@ int dummy;
         compile_args += swiftc.get_optimization_args(self.get_option_for_target('optimization', target))
         compile_args += swiftc.get_debug_args(self.get_option_for_target('debug', target))
         compile_args += swiftc.get_module_args(module_name)
-        compile_args += self.build.get_project_args(swiftc, target.subproject, target.is_cross)
-        compile_args += self.build.get_global_args(swiftc, target.is_cross)
+        compile_args += self.build.get_project_args(swiftc, target.subproject, target.for_machine)
+        compile_args += self.build.get_global_args(swiftc, target.for_machine)
         for i in reversed(target.get_include_dirs()):
             basedir = i.get_curdir()
             for d in i.get_incdirs():
@@ -1336,8 +1335,8 @@ int dummy;
                 sargs = swiftc.get_include_args(srctreedir)
                 compile_args += sargs
         link_args = swiftc.get_output_args(os.path.join(self.environment.get_build_dir(), self.get_target_filename(target)))
-        link_args += self.build.get_project_link_args(swiftc, target.subproject, target.is_cross)
-        link_args += self.build.get_global_link_args(swiftc, target.is_cross)
+        link_args += self.build.get_project_link_args(swiftc, target.subproject, target.for_machine)
+        link_args += self.build.get_global_link_args(swiftc, target.for_machine)
         rundir = self.get_target_private_dir(target)
         out_module_name = self.swift_module_file_name(target)
         in_module_files = self.determine_swift_dep_modules(target)
@@ -1396,69 +1395,56 @@ int dummy;
         # Introspection information
         self.create_target_source_introspection(target, swiftc, compile_args + header_imports + module_includes, relsrc, rel_generated)
 
-    def generate_static_link_rules(self, is_cross, outfile):
+    def generate_static_link_rules(self, outfile):
         num_pools = self.environment.coredata.backend_options['backend_max_links'].value
-        if 'java' in self.build.compilers:
-            if not is_cross:
-                self.generate_java_link(outfile)
-        if is_cross:
-            if self.environment.is_cross_build():
-                static_linker = self.build.static_cross_linker
-            else:
-                static_linker = self.build.static_linker
-            crstr = '_CROSS'
-        else:
-            static_linker = self.build.static_linker
-            crstr = ''
-        if static_linker is None:
-            return
-        rule = 'rule STATIC%s_LINKER\n' % crstr
-        if static_linker.can_linker_accept_rsp():
-            command_template = ''' command = {executable} $LINK_ARGS {output_args} @$out.rsp
+
+        if 'java' in self.build.compilers.host:
+            self.generate_java_link(outfile)
+        for for_machine in list(MachineChoice):
+            static_linker = self.build.static_linker[for_machine]
+            if static_linker is None:
+                return
+            rule = 'rule STATIC_LINKER%s\n' % NinjaBackend.get_crstr(for_machine)
+            if static_linker.can_linker_accept_rsp():
+                command_template = ''' command = {executable} $LINK_ARGS {output_args} @$out.rsp
  rspfile = $out.rsp
  rspfile_content = $in
 '''
-        else:
-            command_template = ' command = {executable} $LINK_ARGS {output_args} $in\n'
-        cmdlist = []
-        # FIXME: Must normalize file names with pathlib.Path before writing
-        #        them out to fix this properly on Windows. See:
-        # https://github.com/mesonbuild/meson/issues/1517
-        # https://github.com/mesonbuild/meson/issues/1526
-        if isinstance(static_linker, ArLinker) and not mesonlib.is_windows():
-            # `ar` has no options to overwrite archives. It always appends,
-            # which is never what we want. Delete an existing library first if
-            # it exists. https://github.com/mesonbuild/meson/issues/1355
-            cmdlist = [execute_wrapper, rmfile_prefix.format('$out')]
-        cmdlist += static_linker.get_exelist()
-        command = command_template.format(
-            executable=' '.join(cmdlist),
-            output_args=' '.join(static_linker.get_output_args('$out')))
-        description = ' description = Linking static target $out.\n\n'
-        outfile.write(rule)
-        outfile.write(command)
-        if num_pools > 0:
-            outfile.write(' pool = link_pool\n')
-        outfile.write(description)
+            else:
+                command_template = ' command = {executable} $LINK_ARGS {output_args} $in\n'
+            cmdlist = []
+            # FIXME: Must normalize file names with pathlib.Path before writing
+            #        them out to fix this properly on Windows. See:
+            # https://github.com/mesonbuild/meson/issues/1517
+            # https://github.com/mesonbuild/meson/issues/1526
+            if isinstance(static_linker, ArLinker) and \
+               not self.environment.machines[for_machine].is_windows():
+                # `ar` has no options to overwrite archives. It always appends,
+                # which is never what we want. Delete an existing library first if
+                # it exists. https://github.com/mesonbuild/meson/issues/1355
+                cmdlist = [execute_wrapper, rmfile_prefix.format('$out')]
+            cmdlist += static_linker.get_exelist()
+            command = command_template.format(
+                executable=' '.join(cmdlist),
+                output_args=' '.join(static_linker.get_output_args('$out')))
+            description = ' description = Linking static target $out.\n\n'
+            outfile.write(rule)
+            outfile.write(command)
+            if num_pools > 0:
+                outfile.write(' pool = link_pool\n')
+            outfile.write(description)
 
     def generate_dynamic_link_rules(self, outfile):
         num_pools = self.environment.coredata.backend_options['backend_max_links'].value
-        ctypes = [(self.build.compilers, False)]
-        if self.environment.is_cross_build():
-            ctypes.append((self.build.cross_compilers, True))
-        else:
-            ctypes.append((self.build.cross_compilers, True))
-        for (complist, is_cross) in ctypes:
+        for for_machine in list(MachineChoice):
+            complist = self.build.compilers[for_machine]
             for langname, compiler in complist.items():
                 if langname == 'java' \
                         or langname == 'vala' \
                         or langname == 'rust' \
                         or langname == 'cs':
                     continue
-                crstr = ''
-                if is_cross:
-                    crstr = '_CROSS'
-                rule = 'rule %s%s_LINKER\n' % (langname, crstr)
+                rule = 'rule %s_LINKER%s\n' % (langname, NinjaBackend.get_crstr(for_machine))
                 if compiler.can_linker_accept_rsp():
                     command_template = ''' command = {executable} @$out.rsp
  rspfile = $out.rsp
@@ -1533,11 +1519,9 @@ int dummy;
         outfile.write(restat)
         outfile.write('\n')
 
-    def generate_rust_compile_rules(self, compiler, outfile, is_cross):
-        crstr = ''
-        if is_cross:
-            crstr = '_CROSS'
-        rule = 'rule %s%s_COMPILER\n' % (compiler.get_language(), crstr)
+    def generate_rust_compile_rules(self, compiler, outfile, for_machine: MachineChoice):
+        rule = 'rule %s%s_COMPILER\n' % \
+            (compiler.get_language(), NinjaBackend.get_crstr(for_machine))
         invoc = ' '.join([ninja_quote(i) for i in compiler.get_exelist()])
         command = ' command = %s $ARGS $in\n' % invoc
         description = ' description = Compiling Rust source $in.\n'
@@ -1583,10 +1567,11 @@ rule FORTRAN_DEP_HACK%s
 '''
         outfile.write(template % (crstr, cmd))
 
-    def generate_llvm_ir_compile_rule(self, compiler, is_cross, outfile):
+    def generate_llvm_ir_compile_rule(self, compiler, for_machine: MachineChoice, outfile):
         if getattr(self, 'created_llvm_ir_rule', False):
             return
-        rule = 'rule llvm_ir{}_COMPILER\n'.format('_CROSS' if is_cross else '')
+        rule = 'rule llvm_ir_COMPILER%s\n' \
+            .format(NinjaBackend.get_crstr(for_machine))
         if compiler.can_linker_accept_rsp():
             command_template = ' command = {executable} @$out.rsp\n' \
                                ' rspfile = $out.rsp\n' \
@@ -1605,40 +1590,36 @@ rule FORTRAN_DEP_HACK%s
         outfile.write('\n')
         self.created_llvm_ir_rule = True
 
-    def generate_compile_rule_for(self, langname, compiler, is_cross, outfile):
+    def generate_compile_rule_for(self, langname, compiler, for_machine: MachineChoice, outfile):
         if langname == 'java':
-            if not is_cross:
+            if self.environment.machines.matches_build_machine(for_machine):
                 self.generate_java_compile_rule(compiler, outfile)
             return
         if langname == 'cs':
-            if not is_cross:
+            if self.environment.machines.matches_build_machine(for_machine):
                 self.generate_cs_compile_rule(compiler, outfile)
             return
         if langname == 'vala':
-            if not is_cross:
+            if self.environment.machines.matches_build_machine(for_machine):
                 self.generate_vala_compile_rules(compiler, outfile)
             return
         if langname == 'rust':
-            self.generate_rust_compile_rules(compiler, outfile, is_cross)
+            self.generate_rust_compile_rules(compiler, outfile, for_machine)
             return
         if langname == 'swift':
-            if not is_cross:
+            if self.environment.machines.matches_build_machine(for_machine):
                 self.generate_swift_compile_rules(compiler, outfile)
             return
-        if is_cross:
-            crstr = '_CROSS'
-        else:
-            crstr = ''
+        crstr = NinjaBackend.get_crstr(for_machine)
         if langname == 'fortran':
             self.generate_fortran_dep_hack(outfile, crstr)
-        rule = 'rule %s%s_COMPILER\n' % (langname, crstr)
+        rule = 'rule %s_COMPILER%s\n' % (langname, crstr)
         depargs = compiler.get_dependency_gen_args('$out', '$DEPFILE')
         quoted_depargs = []
         for d in depargs:
             if d != '$out' and d != '$in':
                 d = quote_func(d)
             quoted_depargs.append(d)
-
         if compiler.can_linker_accept_rsp():
             command_template = ''' command = {executable} @$out.rsp
  rspfile = $out.rsp
@@ -1664,14 +1645,10 @@ rule FORTRAN_DEP_HACK%s
         outfile.write(description)
         outfile.write('\n')
 
-    def generate_pch_rule_for(self, langname, compiler, is_cross, outfile):
+    def generate_pch_rule_for(self, langname, compiler, for_machine: MachineChoice, outfile):
         if langname != 'c' and langname != 'cpp':
             return
-        if is_cross:
-            crstr = '_CROSS'
-        else:
-            crstr = ''
-        rule = 'rule %s%s_PCH\n' % (langname, crstr)
+        rule = 'rule %s_PCH%s\n' % (langname, NinjaBackend.get_crstr(for_machine))
         depargs = compiler.get_dependency_gen_args('$out', '$DEPFILE')
 
         quoted_depargs = []
@@ -1702,18 +1679,13 @@ rule FORTRAN_DEP_HACK%s
         outfile.write('\n')
 
     def generate_compile_rules(self, outfile):
-        for langname, compiler in self.build.compilers.items():
-            if compiler.get_id() == 'clang':
-                self.generate_llvm_ir_compile_rule(compiler, False, outfile)
-            self.generate_compile_rule_for(langname, compiler, False, outfile)
-            self.generate_pch_rule_for(langname, compiler, False, outfile)
-        if self.environment.is_cross_build():
-            cclist = self.build.cross_compilers
-            for langname, compiler in cclist.items():
+        for for_machine in list(MachineChoice):
+            clist = self.build.compilers[for_machine]
+            for langname, compiler in clist.items():
                 if compiler.get_id() == 'clang':
-                    self.generate_llvm_ir_compile_rule(compiler, True, outfile)
-                self.generate_compile_rule_for(langname, compiler, True, outfile)
-                self.generate_pch_rule_for(langname, compiler, True, outfile)
+                    self.generate_llvm_ir_compile_rule(compiler, for_machine, outfile)
+                self.generate_compile_rule_for(langname, compiler, for_machine, outfile)
+                self.generate_pch_rule_for(langname, compiler, for_machine, outfile)
         outfile.write('\n')
 
     def generate_generator_list_rules(self, target, outfile):
@@ -1804,7 +1776,8 @@ rule FORTRAN_DEP_HACK%s
 
     def scan_fortran_module_outputs(self, target):
         compiler = None
-        for lang, c in self.build.compilers.items():
+        # TODO other compilers
+        for lang, c in self.build.compilers.host.items():
             if lang == 'fortran':
                 compiler = c
                 break
@@ -1898,7 +1871,7 @@ rule FORTRAN_DEP_HACK%s
         return mod_files
 
     def get_cross_stdlib_args(self, target, compiler):
-        if not target.is_cross:
+        if self.environment.machines.matches_build_machine(target.for_machine):
             return []
         if not self.environment.properties.host.has_stdlib(compiler.language):
             return []
@@ -1990,7 +1963,8 @@ rule FORTRAN_DEP_HACK%s
         else:
             raise InvalidArguments('Invalid source type: {!r}'.format(src))
         # Write the Ninja build command
-        compiler_name = 'llvm_ir{}_COMPILER'.format('_CROSS' if target.is_cross else '')
+        crstr = NinjaBackend.get_crstr(target.for_machine)
+        compiler_name = 'llvm_ir_COMPILER{}'.format(crstr)
         element = NinjaBuildElement(self.all_outputs, rel_obj, compiler_name, rel_src)
         # Convert from GCC-style link argument naming to the naming used by the
         # current compiler.
@@ -2170,10 +2144,8 @@ rule FORTRAN_DEP_HACK%s
             arr.append(i)
             pch_dep = arr
 
-        crstr = ''
-        if target.is_cross:
-            crstr = '_CROSS'
-        compiler_name = '%s%s_COMPILER' % (compiler.get_language(), crstr)
+        crstr = NinjaBackend.get_crstr(target.for_machine)
+        compiler_name = '%s_COMPILER%s' % (compiler.get_language(), crstr)
         extra_deps = []
         if compiler.get_language() == 'fortran':
             # Can't read source file to scan for deps if it's generated later
@@ -2269,10 +2241,8 @@ rule FORTRAN_DEP_HACK%s
         return commands, dep, dst, []  # Gcc does not create an object file during pch generation.
 
     def generate_pch(self, target, outfile, header_deps=[]):
-        cstr = ''
+        cstr = NinjaBackend.get_crstr(target.for_machine)
         pch_objects = []
-        if target.is_cross:
-            cstr = '_CROSS'
         for lang in ['c', 'cpp']:
             pch = target.get_pch(lang)
             if not pch:
@@ -2312,11 +2282,12 @@ rule FORTRAN_DEP_HACK%s
         symname = os.path.join(targetdir, target_name + '.symbols')
         elem = NinjaBuildElement(self.all_outputs, symname, 'SHSYM', target_file)
         if self.environment.is_cross_build():
-            elem.add_item('CROSS', '--cross-host=' + self.environment.machines.host.system)
+            elem.add_item('CROSS', '--cross-host=' + self.environment.machines[target.for_machine].system)
         elem.write(outfile)
 
     def get_cross_stdlib_link_args(self, target, linker):
-        if isinstance(target, build.StaticLibrary) or not target.is_cross:
+        if isinstance(target, build.StaticLibrary) or \
+           self.environment.machines.matches_build_machine(target.for_machine):
             return []
         if not self.environment.properties.host.has_stdlib(linker.language):
             return []
@@ -2455,10 +2426,8 @@ rule FORTRAN_DEP_HACK%s
             linker_base = linker.get_language() # Fixme.
         if isinstance(target, build.SharedLibrary):
             self.generate_shsym(outfile, target)
-        crstr = ''
-        if target.is_cross:
-            crstr = '_CROSS'
-        linker_rule = linker_base + crstr + '_LINKER'
+        crstr = NinjaBackend.get_crstr(target.for_machine)
+        linker_rule = linker_base + '_LINKER' + crstr
         # Create an empty commands list, and start adding link arguments from
         # various sources in the order in which they must override each other
         # starting from hard-coded defaults followed by build options and so on.
@@ -2492,20 +2461,15 @@ rule FORTRAN_DEP_HACK%s
         if not isinstance(target, build.StaticLibrary):
             commands += self.get_link_whole_args(linker, target)
 
-        if self.environment.is_cross_build() and not target.is_cross:
-            for_machine = MachineChoice.BUILD
-        else:
-            for_machine = MachineChoice.HOST
-
         if not isinstance(target, build.StaticLibrary):
             # Add link args added using add_project_link_arguments()
-            commands += self.build.get_project_link_args(linker, target.subproject, target.is_cross)
+            commands += self.build.get_project_link_args(linker, target.subproject, target.for_machine)
             # Add link args added using add_global_link_arguments()
             # These override per-project link arguments
-            commands += self.build.get_global_link_args(linker, target.is_cross)
+            commands += self.build.get_global_link_args(linker, target.for_machine)
             # Link args added from the env: LDFLAGS. We want these to override
             # all the defaults but not the per-target link args.
-            commands += self.environment.coredata.get_external_link_args(for_machine, linker.get_language())
+            commands += self.environment.coredata.get_external_link_args(target.for_machine, linker.get_language())
 
         # Now we will add libraries and library paths from various sources
 
@@ -2554,7 +2518,7 @@ rule FORTRAN_DEP_HACK%s
         # to be after all internal and external libraries so that unresolved
         # symbols from those can be found here. This is needed when the
         # *_winlibs that we want to link to are static mingw64 libraries.
-        commands += linker.get_option_link_args(self.environment.coredata.compiler_options[for_machine])
+        commands += linker.get_option_link_args(self.environment.coredata.compiler_options[target.for_machine])
 
         dep_targets = []
         dep_targets.extend(self.guess_external_link_dependencies(linker, target, commands, internal))

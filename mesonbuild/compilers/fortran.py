@@ -14,6 +14,7 @@
 from typing import List
 import subprocess, os
 
+from ..mesonlib import MachineChoice
 from .c import CCompiler
 from .compilers import (
     CompilerType,
@@ -38,12 +39,12 @@ class FortranCompiler(Compiler):
     program_dirs_cache = CCompiler.library_dirs_cache
     find_library_cache = CCompiler.library_dirs_cache
 
-    def __init__(self, exelist, version, is_cross, exe_wrapper=None, **kwargs):
+    def __init__(self, exelist, version, for_machine: MachineChoice, is_cross, exe_wrapper=None, **kwargs):
         self.language = 'fortran'
         Compiler.__init__(self, exelist, version, **kwargs)
-        cc = CCompiler(exelist, version, is_cross, exe_wrapper, **kwargs)
+        cc = CCompiler(exelist, version, for_machine, is_cross, exe_wrapper, **kwargs)
         self.id = 'unknown'
-        self.is_cross = cc.is_cross
+        self.for_machine = cc.for_machine
         self.exe_wrapper = cc.exe_wrapper
 
     def get_display_language(self):
@@ -276,8 +277,8 @@ class FortranCompiler(Compiler):
         return CCompiler._get_file_from_list(env, files)
 
 class GnuFortranCompiler(GnuCompiler, FortranCompiler):
-    def __init__(self, exelist, version, compiler_type, is_cross, exe_wrapper=None, defines=None, **kwargs):
-        FortranCompiler.__init__(self, exelist, version, is_cross, exe_wrapper, **kwargs)
+    def __init__(self, exelist, version, compiler_type, for_machine: MachineChoice, is_cross, exe_wrapper=None, defines=None, **kwargs):
+        FortranCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper, **kwargs)
         GnuCompiler.__init__(self, compiler_type, defines)
         default_warn_args = ['-Wall']
         self.warn_args = {'0': [],
@@ -299,13 +300,13 @@ class GnuFortranCompiler(GnuCompiler, FortranCompiler):
 
 
 class ElbrusFortranCompiler(GnuFortranCompiler, ElbrusCompiler):
-    def __init__(self, exelist, version, compiler_type, is_cross, exe_wrapper=None, defines=None, **kwargs):
-        GnuFortranCompiler.__init__(self, exelist, version, compiler_type, is_cross, exe_wrapper, defines, **kwargs)
+    def __init__(self, exelist, version, compiler_type, for_machine: MachineChoice, is_cross, exe_wrapper=None, defines=None, **kwargs):
+        GnuFortranCompiler.__init__(self, exelist, version, compiler_type, for_machine, is_cross, exe_wrapper, defines, **kwargs)
         ElbrusCompiler.__init__(self, compiler_type, defines)
 
 class G95FortranCompiler(FortranCompiler):
-    def __init__(self, exelist, version, is_cross, exe_wrapper=None, **kwags):
-        FortranCompiler.__init__(self, exelist, version, is_cross, exe_wrapper, **kwags)
+    def __init__(self, exelist, version, for_machine: MachineChoice, is_cross, exe_wrapper=None, **kwags):
+        FortranCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper, **kwags)
         self.id = 'g95'
         default_warn_args = ['-Wall']
         self.warn_args = {'0': [],
@@ -322,8 +323,8 @@ class G95FortranCompiler(FortranCompiler):
 
 
 class SunFortranCompiler(FortranCompiler):
-    def __init__(self, exelist, version, is_cross, exe_wrapper=None, **kwags):
-        FortranCompiler.__init__(self, exelist, version, is_cross, exe_wrapper, **kwags)
+    def __init__(self, exelist, version, for_machine: MachineChoice, is_cross, exe_wrapper=None, **kwags):
+        FortranCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper, **kwags)
         self.id = 'sun'
 
     def get_dependency_gen_args(self, outtarget, outfile):
@@ -346,9 +347,9 @@ class SunFortranCompiler(FortranCompiler):
 
 
 class IntelFortranCompiler(IntelCompiler, FortranCompiler):
-    def __init__(self, exelist, version, is_cross, exe_wrapper=None, **kwags):
+    def __init__(self, exelist, version, for_machine: MachineChoice, is_cross, exe_wrapper=None, **kwags):
         self.file_suffixes = ('f90', 'f', 'for', 'ftn', 'fpp')
-        FortranCompiler.__init__(self, exelist, version, is_cross, exe_wrapper, **kwags)
+        FortranCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper, **kwags)
         # FIXME: Add support for OS X and Windows in detect_fortran_compiler so
         # we are sent the type of compiler
         IntelCompiler.__init__(self, CompilerType.ICC_STANDARD)
@@ -373,8 +374,8 @@ class IntelFortranCompiler(IntelCompiler, FortranCompiler):
 
 
 class PathScaleFortranCompiler(FortranCompiler):
-    def __init__(self, exelist, version, is_cross, exe_wrapper=None, **kwags):
-        FortranCompiler.__init__(self, exelist, version, is_cross, exe_wrapper, **kwags)
+    def __init__(self, exelist, version, for_machine: MachineChoice, is_cross, exe_wrapper=None, **kwags):
+        FortranCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper, **kwags)
         self.id = 'pathscale'
         default_warn_args = ['-fullwarn']
         self.warn_args = {'0': [],
@@ -387,14 +388,14 @@ class PathScaleFortranCompiler(FortranCompiler):
 
 
 class PGIFortranCompiler(PGICompiler, FortranCompiler):
-    def __init__(self, exelist, version, is_cross, exe_wrapper=None, **kwags):
-        FortranCompiler.__init__(self, exelist, version, is_cross, exe_wrapper, **kwags)
+    def __init__(self, exelist, version, for_machine: MachineChoice, is_cross, exe_wrapper=None, **kwags):
+        FortranCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper, **kwags)
         PGICompiler.__init__(self, CompilerType.PGI_STANDARD)
 
 
 class FlangFortranCompiler(ClangCompiler, FortranCompiler):
-    def __init__(self, exelist, version, is_cross, exe_wrapper=None, **kwags):
-        FortranCompiler.__init__(self, exelist, version, is_cross, exe_wrapper, **kwags)
+    def __init__(self, exelist, version, for_machine: MachineChoice, is_cross, exe_wrapper=None, **kwags):
+        FortranCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper, **kwags)
         ClangCompiler.__init__(self, CompilerType.CLANG_STANDARD)
         self.id = 'flang'
         default_warn_args = ['-Minform=inform']
@@ -404,8 +405,8 @@ class FlangFortranCompiler(ClangCompiler, FortranCompiler):
                           '3': default_warn_args}
 
 class Open64FortranCompiler(FortranCompiler):
-    def __init__(self, exelist, version, is_cross, exe_wrapper=None, **kwags):
-        FortranCompiler.__init__(self, exelist, version, is_cross, exe_wrapper, **kwags)
+    def __init__(self, exelist, version, for_machine: MachineChoice, is_cross, exe_wrapper=None, **kwags):
+        FortranCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper, **kwags)
         self.id = 'open64'
         default_warn_args = ['-fullwarn']
         self.warn_args = {'0': [],
@@ -418,8 +419,8 @@ class Open64FortranCompiler(FortranCompiler):
 
 
 class NAGFortranCompiler(FortranCompiler):
-    def __init__(self, exelist, version, is_cross, exe_wrapper=None, **kwags):
-        FortranCompiler.__init__(self, exelist, version, is_cross, exe_wrapper, **kwags)
+    def __init__(self, exelist, version, for_machine: MachineChoice, is_cross, exe_wrapper=None, **kwags):
+        FortranCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper, **kwags)
         self.id = 'nagfor'
 
     def get_warn_args(self, level):

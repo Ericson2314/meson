@@ -21,7 +21,7 @@ from .. import coredata
 from .. import mlog
 from .. import mesonlib
 from ..mesonlib import (
-    EnvironmentException, MesonException, OrderedSet,
+    EnvironmentException, MachineChoice, MesonException, OrderedSet,
     version_compare, Popen_safe
 )
 
@@ -868,7 +868,7 @@ class Compiler:
     # Cache for the result of compiler checks which can be cached
     compiler_check_cache = {}
 
-    def __init__(self, exelist, version, **kwargs):
+    def __init__(self, exelist, version, for_machine: MachineChoice, **kwargs):
         if isinstance(exelist, str):
             self.exelist = [exelist]
         elif isinstance(exelist, list):
@@ -886,6 +886,7 @@ class Compiler:
             self.full_version = kwargs['full_version']
         else:
             self.full_version = None
+        self.for_machine = for_machine
         self.base_options = []
 
     def __repr__(self):
@@ -1773,7 +1774,7 @@ class ClangCompiler(GnuLikeCompiler):
 
 class ArmclangCompiler:
     def __init__(self, compiler_type):
-        if not self.is_cross:
+        if not self.for_machine >= MachineChoice.HOST:
             raise EnvironmentException('armclang supports only cross-compilation.')
         # Check whether 'armlink.exe' is available in path
         self.linker_exe = 'armlink.exe'
@@ -1933,7 +1934,7 @@ class IntelCompiler(GnuLikeCompiler):
 class ArmCompiler:
     # Functionality that is common to all ARM family compilers.
     def __init__(self, compiler_type):
-        if not self.is_cross:
+        if not self.for_machine >= MachineChoice.HOST:
             raise EnvironmentException('armcc supports only cross-compilation.')
         self.id = 'arm'
         self.compiler_type = compiler_type

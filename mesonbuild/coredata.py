@@ -266,8 +266,10 @@ class CoreData:
         self.base_options = {}
         self.external_preprocess_args = PerMachine({}, {}, {}) # CPPFLAGS only
         self.cross_file = self.__load_cross_file(options.cross_file)
-        self.compilers = OrderedDict()
-        self.cross_compilers = OrderedDict()
+        self.compilers = PerMachine(
+            OrderedDict(),
+            OrderedDict(),
+            OrderedDict())
         self.deps = OrderedDict()
         # Only to print a warning if it changes between Meson invocations.
         self.pkgconf_envvar = os.environ.get('PKG_CONFIG_PATH', '')
@@ -561,52 +563,34 @@ class CoreData:
 
         self.set_options(options, subproject)
 
-    def process_new_compilers(self, lang: str, comp, cross_comp, env):
+    def process_new_compiler(self, lang: str, comp, env):
         from . import compilers
 
-        self.compilers[lang] = comp
-        if cross_comp is not None:
-            self.cross_compilers[lang] = cross_comp
-
-        # Native compiler always exist so always add its options.
-        new_options_for_build = comp.get_options()
-        preproc_flags_for_build = comp.get_preproc_flags()
-        if cross_comp is not None:
-            new_options_for_host = cross_comp.get_options()
-            preproc_flags_for_host = cross_comp.get_preproc_flags()
-        else:
-            new_options_for_host = comp.get_options()
-            preproc_flags_for_host = comp.get_preproc_flags()
-
-        opts_machines_list = [
-            (new_options_for_build, preproc_flags_for_build, MachineChoice.BUILD),
-            (new_options_for_host, preproc_flags_for_host, MachineChoice.HOST),
-        ]
+        self.compilers[comp.for_machine][lang] = comp
 
         optprefix = lang + '_'
-        for new_options, preproc_flags, for_machine in opts_machines_list:
-            for k, o in new_options.items():
-                if not k.startswith(optprefix):
-                    raise MesonException('Internal error, %s has incorrect prefix.' % k)
-                if k in env.properties[for_machine]:
-                    # Get from configuration files.
-                    o.set_value(env.properties[for_machine][k])
-                if (env.machines.matches_build_machine(for_machine) and
-                        k in env.cmd_line_options):
-                    # TODO think about cross and command-line interface.
-                    o.set_value(env.cmd_line_options[k])
-                self.compiler_options[for_machine].setdefault(k, o)
+        for k, o in comp.get_options().items():
+            if not k.startswith(optprefix):
+                raise MesonException('Internal error, %s has incorrect prefix.' % k)
+            if k in env.properties[comp.for_machine]:
+                # Get from configuration files.
+                o.set_value(env.properties[comp.for_machine][k])
+            if env.machines.matches_build_machine(comp.for_machine) \
+               and k in env.cmd_line_options:
+                # TODO think about cross and command-line interface.
+                o.set_value(env.cmd_line_options[k])
+            self.compiler_options[comp.for_machine].setdefault(k, o)
 
-            # Unlike compiler and linker flags, preprocessor flags are not in
-            # compiler_options because they are not visible to user.
-            preproc_flags = shlex.split(preproc_flags)
-            k = lang + '_args'
-            if lang in ('c', 'cpp', 'objc', 'objcpp') and k in env.properties[for_machine]:
-                # `c_args` in the cross file are used, like CPPFLAGS but *not*
-                # CFLAGS, for tests. this is weird, but how it was already
-                # implemented. Hopefully a new version of #3916 fixes it.
-                preproc_flags = stringlistify(env.properties[for_machine][k])
-            self.external_preprocess_args[for_machine].setdefault(lang, preproc_flags)
+        # Unlike compiler and linker flags, preprocessor flags are not in
+        # compiler_options because they are not visible to user.
+        preproc_flags = shlex.split(comp.get_preproc_flags())
+        k = lang + '_args'
+        if lang in ('c', 'cpp', 'objc', 'objcpp') and k in env.properties[comp.for_machine]:
+            # `c_args` in the cross file are used, like CPPFLAGS but *not*
+            # CFLAGS, for tests. this is weird, but how it was already
+            # implemented. Hopefully a new version of #3916 fixes it.
+            preproc_flags = stringlistify(env.properties[comp.for_machine][k])
+        self.external_preprocess_args[comp.for_machine].setdefault(lang, preproc_flags)
 
         enabled_opts = []
         for optname in comp.base_options:

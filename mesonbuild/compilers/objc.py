@@ -14,15 +14,15 @@
 
 import os.path, subprocess
 
-from ..mesonlib import EnvironmentException
+from ..mesonlib import EnvironmentException, MachineChoice
 
 from .c import CCompiler
 from .compilers import ClangCompiler, GnuCompiler
 
 class ObjCCompiler(CCompiler):
-    def __init__(self, exelist, version, is_cross, exe_wrap):
+    def __init__(self, exelist, version, for_machine: MachineChoice, is_cross, exe_wrap):
         self.language = 'objc'
-        CCompiler.__init__(self, exelist, version, is_cross, exe_wrap)
+        CCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrap)
 
     def get_display_language(self):
         return 'Objective-C'
@@ -51,8 +51,8 @@ class ObjCCompiler(CCompiler):
 
 
 class GnuObjCCompiler(GnuCompiler, ObjCCompiler):
-    def __init__(self, exelist, version, compiler_type, is_cross, exe_wrapper=None, defines=None):
-        ObjCCompiler.__init__(self, exelist, version, is_cross, exe_wrapper)
+    def __init__(self, exelist, version, compiler_type, for_machine: MachineChoice, is_cross, exe_wrapper=None, defines=None):
+        ObjCCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper)
         GnuCompiler.__init__(self, compiler_type, defines)
         default_warn_args = ['-Wall', '-Winvalid-pch']
         self.warn_args = {'0': [],
@@ -62,8 +62,8 @@ class GnuObjCCompiler(GnuCompiler, ObjCCompiler):
 
 
 class ClangObjCCompiler(ClangCompiler, ObjCCompiler):
-    def __init__(self, exelist, version, compiler_type, is_cross, exe_wrapper=None):
-        ObjCCompiler.__init__(self, exelist, version, is_cross, exe_wrapper)
+    def __init__(self, exelist, version, compiler_type, for_machine: MachineChoice, is_cross, exe_wrapper=None):
+        ObjCCompiler.__init__(self, exelist, version, for_machine, is_cross, exe_wrapper)
         ClangCompiler.__init__(self, compiler_type)
         default_warn_args = ['-Wall', '-Winvalid-pch']
         self.warn_args = {'0': [],

@@ -30,7 +30,7 @@ from mesonbuild import environment
 from mesonbuild import mesonlib
 from mesonbuild import mlog
 from mesonbuild import mtest
-from mesonbuild.mesonlib import stringlistify, Popen_safe
+from mesonbuild.mesonlib import MachineChoice, stringlistify, Popen_safe
 from mesonbuild.coredata import backendlist
 import argparse
 import xml.etree.ElementTree as ET
@@ -125,10 +125,10 @@ def platform_fix_name(fname, compiler, env):
         canonical_compiler = compiler
 
     if '?lib' in fname:
-        if mesonlib.for_windows(env) and canonical_compiler == 'msvc':
+        if env.machines.host.is_windows(env) and canonical_compiler == 'msvc':
             fname = re.sub(r'lib/\?lib(.*)\.', r'bin/\1.', fname)
             fname = re.sub(r'/\?lib/', r'/bin/', fname)
-        elif mesonlib.for_windows(env.is_cross_build(), env):
+        elif env.machines.host.is_windows(env):
             fname = re.sub(r'lib/\?lib(.*)\.', r'bin/lib\1.', fname)
             fname = re.sub(r'\?lib(.*)\.dll$', r'lib\1.dll', fname)
             fname = re.sub(r'/\?lib/', r'/bin/', fname)
@@ -142,7 +142,7 @@ def platform_fix_name(fname, compiler, env):
 
     if fname.endswith('?exe'):
         fname = fname[:-4]
-        if mesonlib.for_windows(env) or mesonlib.for_cygwin(env):
+        if env.machines.host.is_windows(env) or env.machines.host.is_cygwin(env):
             return fname + '.exe'
 
     if fname.startswith('?msvc:'):
@@ -447,7 +447,7 @@ def have_objc_compiler():
     with AutoDeletedDir(tempfile.mkdtemp(prefix='b ', dir='.')) as build_dir:
         env = environment.Environment(None, build_dir, get_fake_options('/'))
         try:
-            objc_comp = env.detect_objc_compiler(False)
+            objc_comp = env.detect_objc_compiler(MachineChoice.HOST)
         except mesonlib.MesonException:
             return False
         if not objc_comp:
@@ -462,7 +462,7 @@ def have_objcpp_compiler():
     with AutoDeletedDir(tempfile.mkdtemp(prefix='b ', dir='.')) as build_dir:
         env = environment.Environment(None, build_dir, get_fake_options('/'))
         try:
-            objcpp_comp = env.detect_objcpp_compiler(False)
+            objcpp_comp = env.detect_objcpp_compiler(MachineChoice.HOST)
         except mesonlib.MesonException:
             return False
         if not objcpp_comp:

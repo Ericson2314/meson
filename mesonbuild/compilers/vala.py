@@ -15,17 +15,17 @@
 import os.path
 
 from .. import mlog
-from ..mesonlib import EnvironmentException, version_compare
+from ..mesonlib import EnvironmentException, MachineChoice, version_compare
 
 from .compilers import Compiler
 
 class ValaCompiler(Compiler):
-    def __init__(self, exelist, version):
+    def __init__(self, exelist, version, for_machine: MachineChoice):
         self.language = 'vala'
-        super().__init__(exelist, version)
+        super().__init__(exelist, version, for_machine)
         self.version = version
         self.id = 'valac'
-        self.is_cross = False
+        assert for_machine <= MachineChoice.HOST
         self.base_options = ['b_colorout']
 
     def name_string(self):

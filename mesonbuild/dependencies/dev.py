@@ -21,20 +21,21 @@ import os
 import re
 
 from .. import mesonlib
-from ..mesonlib import version_compare, stringlistify, extract_as_list
+from ..mesonlib import MachineChoice, version_compare, stringlistify, extract_as_list
 from .base import (
     DependencyException, DependencyMethods, ExternalDependency, PkgConfigDependency,
     strip_system_libdirs, ConfigToolDependency,
 )
 
 
-def get_shared_library_suffix(environment, native):
+def get_shared_library_suffix(environment, for_machine: MachineChoice):
     """This is only gauranteed to work for languages that compile to machine
     code, not for languages like C# that use a bytecode and always end in .dll
     """
-    if mesonlib.for_windows(native, environment):
+    m = environment.machines[for_machine]
+    if m.is_windows():
         return '.dll'
-    elif mesonlib.for_darwin(native, environment):
+    elif m.is_darwin():
         return '.dylib'
     return '.so'
 
@@ -251,7 +252,7 @@ class LLVMDependency(ConfigToolDependency):
             self._set_new_link_args(environment)
         else:
             self._set_old_link_args()
-        self.link_args = strip_system_libdirs(environment, self.link_args)
+        self.link_args = strip_system_libdirs(environment, self.for_machine, self.link_args)
         self.link_args = self.__fix_bogus_link_args(self.link_args)
 
     @staticmethod
@@ -304,7 +305,7 @@ class LLVMDependency(ConfigToolDependency):
             try:
                 self.__check_libfiles(True)
             except DependencyException:
-                lib_ext = get_shared_library_suffix(environment, self.native)
+                lib_ext = get_shared_library_suffix(environment, self.for_machine)
                 libdir = self.get_config_value(['--libdir'], 'link_args')[0]
                 # Sort for reproducability
                 matches = sorted(glob.iglob(os.path.join(libdir, 'libLLVM*{}'.format(lib_ext))))

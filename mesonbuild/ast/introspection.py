@@ -18,6 +18,7 @@
 from . import AstInterpreter
 from .. import compilers, environment, mesonlib, mparser, optinterpreter
 from .. import coredata as cdata
+from ..mesonlib import MachineChoice
 from ..interpreterbase import InvalidArguments
 from ..build import Executable, Jar, SharedLibrary, SharedModule, StaticLibrary
 import os
@@ -125,11 +126,11 @@ class IntrospectionInterpreter(AstInterpreter):
 
     def func_add_languages(self, node, args, kwargs):
         args = self.flatten_args(args)
-        need_cross_compiler = self.environment.is_cross_build()
-        for lang in sorted(args, key=compilers.sort_clink):
-            lang = lang.lower()
-            if lang not in self.coredata.compilers:
-                self.environment.detect_compilers(lang, need_cross_compiler)
+        for for_machine in [MachineChoice.BUILD, MachineChoice.HOST]:
+            for lang in sorted(args, key=compilers.sort_clink):
+                lang = lang.lower()
+                if lang not in self.coredata.compilers[for_machine]:
+                    self.environment.detect_compiler_for(lang, for_machine)
 
     def func_dependency(self, node, args, kwargs):
         args = self.flatten_args(args)
@@ -177,10 +178,10 @@ class IntrospectionInterpreter(AstInterpreter):
 
         # Make sure nothing can crash when creating the build class
         kwargs = {}
-        is_cross = False
+        for_machine = MachineChoice.HOST
         objects = []
         empty_sources = [] # Passing the unresolved sources list causes errors
-        target = targetclass(name, self.subdir, self.subproject, is_cross, empty_sources, objects, self.environment, kwargs)
+        target = targetclass(name, self.subdir, self.subproject, for_machine, empty_sources, objects, self.environment, kwargs)
 
         self.targets += [{
             'name': target.get_basename(),
