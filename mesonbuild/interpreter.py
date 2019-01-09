@@ -2458,9 +2458,9 @@ external dependencies (including libraries) must go to "dependencies".''')
         return self.subprojects[dirname]
 
     def get_option_internal(self, optname):
-        for d in chain(
-                [self.coredata.base_options, compilers.base_options, self.coredata.builtins],
-                self.coredata.get_all_compiler_options()):
+        # Some base options are not defined in some environments, return the
+        # default value from compilers.base_options in that case.
+        for d in self.coredata.get_all_options():
             try:
                 return d[optname]
             except KeyError:
