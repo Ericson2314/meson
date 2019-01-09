@@ -595,7 +595,7 @@ class InternalTests(unittest.TestCase):
     def test_needs_exe_wrapper_override(self):
         config = ConfigParser()
         config['binaries'] = {
-            'c': '\'/usr/bin/gcc\'',
+            'c': '\'cc\'',
         }
         config['host_machine'] = {
             'system': '\'linux\'',
@@ -1172,6 +1172,7 @@ class BasePlatformTests(unittest.TestCase):
             if self.meson_cross_file:
                 args += ['--cross-file', self.meson_cross_file]
         self.privatedir = os.path.join(self.builddir, 'meson-private')
+        #args += [ '--debug' ]
         if inprocess:
             try:
                 (returncode, out, err) = run_configure_inprocess(self.meson_args + args + extra_args)
@@ -2618,9 +2619,9 @@ int main(int argc, char **argv) {
         testdir = os.path.join(self.common_test_dir, '1 trivial')
         cross_content = textwrap.dedent("""\
             [binaries]
-            c = '/usr/bin/cc'
-            ar = '/usr/bin/ar'
-            strip = '/usr/bin/ar'
+            c = 'cc'
+            ar = 'ar'
+            strip = 'ar'
 
             [properties]
 
@@ -4730,9 +4731,9 @@ class LinuxlikeTests(BasePlatformTests):
         crossfile = tempfile.NamedTemporaryFile(mode='w')
         print(os.path.join(testdir, 'some_cross_tool.py'))
         crossfile.write('''[binaries]
-c = '/usr/bin/cc'
-ar = '/usr/bin/ar'
-strip = '/usr/bin/ar'
+c = 'cc'
+ar = 'ar'
+strip = 'ar'
 sometool.py = ['{0}']
 someothertool.py = '{0}'
 
