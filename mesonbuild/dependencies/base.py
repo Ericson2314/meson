@@ -518,9 +518,6 @@ class PkgConfigDependency(ExternalDependency):
                 mlog.debug('Pkg-config binary for {} specified from cross file, native file, '
                            'or env var as {}'.format(for_machine, potential_pkgpath))
                 yield ExternalProgram.from_entry('pkgconfig', potential_pkgpath)
-                # We never fallback if the user-specified option is no good, so
-                # stop returning options.
-                return
             mlog.debug('Pkg-config binary missing from cross or native file, or env var undefined.')
             # Fallback on hard-coded defaults.
             # TODO prefix this for the cross case instead of ignoring thing.

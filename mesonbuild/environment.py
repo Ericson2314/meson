@@ -555,6 +555,19 @@ class Environment:
         # really matter since both options are the same in that case.
         for_machine = MachineChoice.HOST if want_cross else MachineChoice.BUILD
 
+        def yield_entry_or_fallbacks_cache(name, is_cross):
+            for compiler, from_user in yield_entry_or_fallbacks():
+                if from_user:
+                    # Ensure ccache exists and remove it if it doesn't
+                    if compiler[0] == 'ccache':
+                        compiler = compiler[1:]
+                        ccache = self.detect_ccache()
+                    else:
+                        ccache = []
+                else:
+                    ccache = self.detect_ccache()
+                yield compiler, ccache
+
         value = self.binaries[for_machine].lookup_entry(lang)
         if value is not None:
             compilers, ccache = BinaryTable.parse_entry(value)
@@ -564,7 +577,6 @@ class Environment:
             if not self.machines.matches_build_machine(for_machine):
                 raise EnvironmentException('{!r} compiler binary not defined in cross or native file'.format(lang))
             compilers = self.binaries[for_machine].defaults[lang]
-            ccache = BinaryTable.detect_ccache()
 
         if self.machines.matches_build_machine(for_machine):
             is_cross = False
@@ -1565,17 +1577,18 @@ class BinaryTable:
             mlog.warning('''Env var %s seems to point to the cross compiler.
 This is probably wrong, it should always point to the native compiler.''' % evar)
 
-    @classmethod
-    def parse_entry(cls, entry):
-        compiler = mesonlib.stringlistify(entry)
-        # Ensure ccache exists and remove it if it doesn't
-        if compiler[0] == 'ccache':
-            compiler = compiler[1:]
-            ccache = cls.detect_ccache()
-        else:
-            ccache = []
-        # Return value has to be a list of compiler 'choices'
-        return compiler, ccache
+    def yield_entry_or_fallbacks(self, name, is_cross):
+        entry = self.lookup_entry(name)
+        if entry is not None:
+            yield entry, True
+            # We never fallback if the user-specified option is no good, so stop
+            # returning options.
+            return
+        # Fallback on hard-coded defaults.
+        # TODO prefix this for the cross case instead of ignoring thing.
+        if name in self.defaults and is_cross:
+            for fallback in self.defaults[name]:
+                yield fallback, False
 
     def lookup_entry(self, name):
         """Lookup binary
