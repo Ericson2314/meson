@@ -525,7 +525,7 @@ class PkgConfigDependency(ExternalDependency):
             # Fallback on hard-coded defaults.
             # TODO prefix this for the cross case instead of ignoring thing.
             if environment.machines.matches_build_machine(for_machine):
-                for potential_pkgpath in environment.default_pkgconfig:
+                for potential_pkgpath in environment.binaries[for_machine].defaults['pkgconfig']:
                     mlog.debug('Trying a default pkg-config fallback at', potential_pkgpath)
                     yield ExternalProgram(potential_pkgpath, silent=True)
 
@@ -966,7 +966,7 @@ class CMakeDependency(ExternalDependency):
             # Fallback on hard-coded defaults.
             # TODO prefix this for the cross case instead of ignoring thing.
             if environment.machines.matches_build_machine(for_machine):
-                for potential_cmakepath in environment.default_cmake:
+                for potential_cmakepath in environment.binaries[for_machine].defaults['cmake']:
                     mlog.debug('Trying a default CMake fallback at', potential_cmakepath)
                     yield ExternalProgram(potential_cmakepath, silent=True)
 

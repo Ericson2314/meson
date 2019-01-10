@@ -416,35 +416,12 @@ class Environment:
 
         self.cmd_line_options = options.cmd_line_options.copy()
 
-        # List of potential compilers.
-        if mesonlib.is_windows():
-            self.default_c = ['cl', 'cc', 'gcc', 'clang', 'clang-cl', 'pgcc']
-            self.default_cpp = ['cl', 'c++', 'g++', 'clang++', 'clang-cl', 'pgc++']
-        else:
-            self.default_c = ['cc', 'gcc', 'clang', 'pgcc']
-            self.default_cpp = ['c++', 'g++', 'clang++', 'pgc++']
-        if mesonlib.is_windows():
-            self.default_cs = ['csc', 'mcs']
-        else:
-            self.default_cs = ['mcs', 'csc']
-        self.default_objc = ['cc']
-        self.default_objcpp = ['c++']
-        self.default_d = ['ldc2', 'ldc', 'gdc', 'dmd']
-        self.default_fortran = ['gfortran', 'g95', 'f95', 'f90', 'f77', 'ifort', 'pgfortran']
-        self.default_java = ['javac']
-        self.default_cuda = ['nvcc']
-        self.default_rust = ['rustc']
-        self.default_swift = ['swiftc']
-        self.default_vala = ['valac']
         self.default_static_linker = ['ar']
-        self.default_strip = ['strip']
         self.vs_static_linker = ['lib']
         self.clang_cl_static_linker = ['llvm-lib']
         self.cuda_static_linker = ['nvlink']
         self.gcc_static_linker = ['gcc-ar']
         self.clang_static_linker = ['llvm-ar']
-        self.default_cmake = ['cmake']
-        self.default_pkgconfig = ['pkg-config']
 
         # Various prefixes and suffixes for import libraries, shared libraries,
         # static libraries, and executables.
@@ -586,7 +563,7 @@ class Environment:
         else:
             if not self.machines.matches_build_machine(for_machine):
                 raise EnvironmentException('{!r} compiler binary not defined in cross or native file'.format(lang))
-            compilers = getattr(self, 'default_' + lang)
+            compilers = self.binaries[for_machine].defaults[lang]
             ccache = BinaryTable.detect_ccache()
 
         if self.machines.matches_build_machine(for_machine):
@@ -919,7 +896,7 @@ class Environment:
         exelist = self.binaries.host.lookup_entry('java')
         if exelist is None:
             # TODO support fallback
-            exelist = [self.default_java[0]]
+            exelist = [self.self.binaries.host.defaults['java'][0]]
 
         try:
             p, out, err = Popen_safe(exelist + ['-version'])
@@ -954,7 +931,7 @@ class Environment:
         exelist = self.binaries.host.lookup_entry('vala')
         if exelist is None:
             # TODO support fallback
-            exelist = [self.default_vala[0]]
+            exelist = [self.self.binaries.host.defaults['vala'][0]]
 
         try:
             p, out = Popen_safe(exelist + ['--version'])[0:2]
@@ -996,7 +973,7 @@ class Environment:
             if os.path.basename(exelist[-1]).startswith(('ldmd', 'gdmd')):
                     raise EnvironmentException('Meson doesn\'t support %s as it\'s only a DMD frontend for another compiler. Please provide a valid value for DC or unset it so that Meson can resolve the compiler by itself.' % exelist[-1])
         else:
-            for d in self.default_d:
+            for d in self.binaries.host.defaults['d']:
                 if shutil.which(d):
                     exelist = [d]
                     break
@@ -1032,7 +1009,7 @@ class Environment:
         exelist = self.binaries.host.lookup_entry('swift')
         if exelist is None:
             # TODO support fallback
-            exelist = [self.default_swift[0]]
+            exelist = [self.self.binaries.host.defaults['swift'][0]]
 
         try:
             p, _, err = Popen_safe(exelist + ['-v'])
@@ -1505,6 +1482,37 @@ class MachineInfos(PerMachineDefaultable):
         return self.build == self[machine]
 
 class BinaryTable:
+    # List of fallback binaries.
+    defaults = {
+        # compilers
+        'objc': ['cc'],
+        'objcpp': ['c++'],
+        'd': ['ldc2', 'ldc', 'gdc', 'dmd'],
+        'fortran': ['gfortran', 'g95', 'f95', 'f90', 'f77', 'ifort', 'pgfortran'],
+        'java': ['javac'],
+        'cuda': ['nvcc'],
+        'rust': ['rustc'],
+        'swift': ['swiftc'],
+        'vala': ['valac'],
+
+        # binutils
+        'strip': ['strip'],
+
+        # other tools
+        'cmake': ['cmake'],
+        'pkgconfig': ['pkg-config'],
+    }
+    if mesonlib.is_windows():
+        defaults['c'] = ['cl', 'cc', 'gcc', 'clang', 'clang-cl']
+        defaults['cpp'] = ['cl', 'c++', 'g++', 'clang++', 'clang-cl']
+    else:
+        defaults['c'] = ['cc', 'gcc', 'clang']
+        defaults['cpp'] = ['c++', 'g++', 'clang++']
+    if mesonlib.is_windows():
+        default['cs'] = ['csc', 'mcs']
+    else:
+        defaults['cs'] = ['mcs', 'csc']
+
     def __init__(self, binaries = {}, fallback = True):
         self.binaries = binaries
         self.fallback = fallback
