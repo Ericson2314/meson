@@ -68,13 +68,13 @@ class TargetInstallData:
         self.optional = optional
 
 class ExecutableSerialisation:
-    def __init__(self, name, fname, cmd_args, env, is_cross, exe_wrapper,
+    def __init__(self, name, fname, cmd_args, env, for_machine: MachineChoice, exe_wrapper,
                  workdir, extra_paths, capture):
         self.name = name
         self.fname = fname
         self.cmd_args = cmd_args
         self.env = env
-        self.is_cross = is_cross
+        self.for_machine = for_machine
         if exe_wrapper is not None:
             assert(isinstance(exe_wrapper, dependencies.ExternalProgram))
         self.exe_runner = exe_wrapper
@@ -83,13 +83,13 @@ class ExecutableSerialisation:
         self.capture = capture
 
 class TestSerialisation:
-    def __init__(self, name, project, suite, fname, is_cross_built, exe_wrapper, is_parallel,
+    def __init__(self, name, project, suite, fname, for_machine: MachineChoice, exe_wrapper, is_parallel,
                  cmd_args, env, should_fail, timeout, workdir, extra_paths):
         self.name = name
         self.project_name = project
         self.suite = suite
         self.fname = fname
-        self.is_cross_built = is_cross_built
+        self.for_machine = for_machine
         if exe_wrapper is not None:
             assert(isinstance(exe_wrapper, dependencies.ExternalProgram))
         self.exe_runner = exe_wrapper
@@ -343,8 +343,8 @@ class Backend:
             else:
                 exe_cmd = [exe]
                 exe_for_machine = MachineChoice.BUILD
-            is_cross_built = not self.environment.machines.matches_build_machine(exe_for_machine)
-            if is_cross_built and self.environment.need_exe_wrapper():
+            if not self.environment.machines.matches_build_machine(exe_for_machine) and \
+               self.environment.need_exe_wrapper():
                 exe_wrapper = self.environment.get_exe_wrapper()
                 if not exe_wrapper.found():
                     msg = 'The exe_wrapper {!r} defined in the cross file is ' \
@@ -354,7 +354,7 @@ class Backend:
             else:
                 exe_wrapper = None
             es = ExecutableSerialisation(basename, exe_cmd, cmd_args, env,
-                                         is_cross_built, exe_wrapper, workdir,
+                                         exe_for_machine, exe_wrapper, workdir,
                                          extra_paths, capture)
             pickle.dump(es, f)
         return exe_data
@@ -698,8 +698,8 @@ class Backend:
                 # E.g. an external verifier or simulator program run on a generated executable.
                 # Can always be run without a wrapper.
                 test_for_machine = MachineChoice.BUILD
-            is_cross = not self.environment.machines.matches_build_machine(test_for_machine)
-            if is_cross and self.environment.need_exe_wrapper():
+            if not self.environment.machines.matches_build_machine(test_for_machine) and \
+               self.environment.need_exe_wrapper():
                 exe_wrapper = self.environment.get_exe_wrapper()
             else:
                 exe_wrapper = None
@@ -726,7 +726,7 @@ class Backend:
                     cmd_args.append(self.construct_target_rel_path(a, t.workdir))
                 else:
                     raise MesonException('Bad object in test command.')
-            ts = TestSerialisation(t.get_name(), t.project_name, t.suite, cmd, is_cross,
+            ts = TestSerialisation(t.get_name(), t.project_name, t.suite, cmd, test_for_machine,
                                    exe_wrapper, t.is_parallel, cmd_args, t.env,
                                    t.should_fail, t.timeout, t.workdir, extra_paths)
             arr.append(ts)

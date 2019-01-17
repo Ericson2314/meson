@@ -20,7 +20,7 @@ import pickle
 from mesonbuild import build
 from mesonbuild import environment
 from mesonbuild.dependencies import ExternalProgram
-from mesonbuild.mesonlib import substring_is_in_list, MesonException
+from mesonbuild.mesonlib import MesonException, substring_is_in_list
 from mesonbuild import mlog
 
 import tempfile
@@ -234,24 +234,24 @@ class SingleTestRunner:
         self.options = options
 
     def _get_cmd(self):
+        is_native = self.env.machines.matches_build_machine(self.test.for_machine)
         if self.test.fname[0].endswith('.jar'):
-            return ['java', '-jar'] + self.test.fname
-        elif not self.test.is_cross_built and run_with_mono(self.test.fname[0]):
-            return ['mono'] + self.test.fname
+            prefix = ['java', '-jar']
+        elif is_native and run_with_mono(self.test.fname[0]):
+            prefix = ['mono']
+        elif self.test.exe_runner is None:
+            if not self.test.exe_runner.found():
+                msg = 'The exe_wrapper defined in the cross file {!r} was not ' \
+                    'found. Please check the command and/or add it to PATH.'
+                raise TestException(msg.format(self.test.exe_runner.name))
+            prefix = self.test.exe_runner.get_command()
+        elif not is_native:
+            # Can not run test on cross compiled executable because there is
+            # no execute wrapper.
+            return None
         else:
-            if self.test.is_cross_built:
-                if self.test.exe_runner is None:
-                    # Can not run test on cross compiled executable
-                    # because there is no execute wrapper.
-                    return None
-                else:
-                    if not self.test.exe_runner.found():
-                        msg = 'The exe_wrapper defined in the cross file {!r} was not ' \
-                              'found. Please check the command and/or add it to PATH.'
-                        raise TestException(msg.format(self.test.exe_runner.name))
-                    return self.test.exe_runner.get_command() + self.test.fname
-            else:
-                return self.test.fname
+            prefix = []
+        return prefix + self.test.fname
 
     def run(self):
         cmd = self._get_cmd()
