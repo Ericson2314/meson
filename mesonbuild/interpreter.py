@@ -999,12 +999,8 @@ class CompilerHolder(InterpreterObject):
                 idir = os.path.join(self.environment.get_source_dir(),
                                     i.held_object.get_curdir(), idir)
                 args += self.compiler.get_include_args(idir, False)
-        native = kwargs.get('native', None)
-        if native:
-            for_machine = MachineChoice.BUILD
-        else:
-            for_machine = MachineChoice.HOST
         if not nobuiltins:
+            for_machine = Interpreter.machine_from_native_kwarg(kwargs)
             opts = self.environment.coredata.compiler_options[for_machine]
             args += self.compiler.get_option_compile_args(opts)
             if mode == 'link':
@@ -1793,12 +1789,7 @@ class MesonMain(InterpreterObject):
         if len(args) != 1:
             raise InterpreterException('get_compiler_method must have one and only one argument.')
         cname = args[0]
-        native = kwargs.get('native', None)
-        if native is None:
-            if self.build.environment.is_cross_build():
-                native = False
-            else:
-                native = True
+        native = kwargs.get('native', False)
         if not isinstance(native, bool):
             raise InterpreterException('Type of "native" must be a boolean.')
         clist = self.build.compilers[MachineChoice.BUILD if native else MachineChoice.HOST]
@@ -2823,7 +2814,7 @@ external dependencies (including libraries) must go to "dependencies".''')
     def _find_cached_dep(self, name, kwargs):
         # Check if we want this as a build-time / build machine or runt-time /
         # host machine dep.
-        for_machine = MachineChoice.BUILD if kwargs.get('native', False) else MachineChoice.HOST
+        for_machine = Interpreter.machine_from_native_kwarg(kwargs)
 
         identifier = dependencies.get_dep_identifier(name, kwargs, for_machine)
         cached_dep = self.coredata.deps.get(identifier)
@@ -3949,10 +3940,7 @@ Try setting b_lundef to false instead.'''.format(self.coredata.base_options['b_s
             raise InterpreterException('Target does not have a name.')
         name = args[0]
         sources = listify(args[1:])
-        if kwargs.get('native', False):
-            for_machine = MachineChoice.BUILD
-        else:
-            for_machine = MachineChoice.HOST
+        for_machine = Interpreter.machine_from_native_kwarg(kwargs)
         if 'sources' in kwargs:
             sources += listify(kwargs['sources'])
         sources = self.source_strings_to_files(sources)
@@ -4113,3 +4101,7 @@ This will become a hard error in the future.''', location=self.current_node)
             raise InvalidCode('Is_variable takes two arguments.')
         varname = args[0]
         return varname in self.variables
+
+    @staticmethod
+    def machine_from_native_kwarg(kwargs):
+        return MachineChoice.BUILD if kwargs.get('native', False) else MachineChoice.HOST
