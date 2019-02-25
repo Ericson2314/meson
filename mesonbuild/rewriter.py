@@ -29,6 +29,7 @@ from . import mlog, mparser, environment
 from functools import wraps
 from pprint import pprint
 from .mparser import Token, ArrayNode, ArgumentNode, AssignmentNode, IdNode, FunctionNode, StringNode
+from typing import Optional
 import json, os
 
 class RewriterException(MesonException):
@@ -73,7 +74,7 @@ class RequiredKeys:
         return wrapped
 
 class MTypeBase:
-    def __init__(self, node: mparser.BaseNode):
+    def __init__(self, node: Optional[mparser.BaseNode]):
         if node is None:
             self.node = self._new_node()
         else:
@@ -83,7 +84,7 @@ class MTypeBase:
             if isinstance(self.node, i):
                 self.node_type = i
 
-    def _new_node(self):
+    def _new_node(self) -> mparser.BaseNode:
         # Overwrite in derived class
         return mparser.BaseNode()
 
@@ -458,7 +459,7 @@ class Rewriter:
         if num_changed > 0 and node not in self.modefied_nodes:
             self.modefied_nodes += [node]
 
-    def find_assignment_node(self, node: mparser) -> AssignmentNode:
+    def find_assignment_node(self, node: mparser) -> Optional[AssignmentNode]:
         if hasattr(node, 'ast_id') and node.ast_id in self.interpreter.reverse_assignment:
             return self.interpreter.reverse_assignment[node.ast_id]
         return None
