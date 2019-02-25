@@ -113,10 +113,10 @@ class Build:
         self.targets = OrderedDict()
         # Coredata holds the state. This is just here for convenience.
         self.compilers = environment.coredata.compilers
-        self.global_args = PerMachine({}, {}, {})
-        self.projects_args = PerMachine({}, {}, {})
-        self.global_link_args = PerMachine({}, {}, {})
-        self.projects_link_args = PerMachine({}, {}, {})
+        self.global_args = PerMachine({}, {}, {}) # PerMachine[Dict[str,List[str]]
+        self.projects_args = PerMachine({}, {}, {}) # PerMachine[Dict[str,List[str]]
+        self.global_link_args = PerMachine({}, {}, {}) # PerMachine[Dict[str,List[str]]
+        self.projects_link_args = PerMachine({}, {}, {}) # PerMachine[Dict[str,List[str]]
         self.tests = []
         self.benchmarks = []
         self.headers = []
@@ -430,7 +430,7 @@ class BuildTarget(Target):
         self.is_unity = unity_opt == 'on' or (unity_opt == 'subprojects' and subproject != '')
         self.environment = environment
         self.sources = []
-        self.compilers = OrderedDict()
+        self.compilers = OrderedDict() # OrderedDict[str, Compiler]
         self.objects = []
         self.external_deps = []
         self.include_dirs = []

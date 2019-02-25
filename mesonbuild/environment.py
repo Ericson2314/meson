@@ -1416,7 +1416,9 @@ class MachineInfo:
             (self.cpu_family == true_build_cpu_family) or \
             ((true_build_cpu_family == 'x86_64') and (self.cpu_family == 'x86'))
 
-class PerMachineDefaultable(PerMachine):
+T = typing.TypeVar('T')
+
+class PerMachineDefaultable(PerMachine[typing.Optional[T]]):
     """Extends `PerMachine` with the ability to default from `None`s.
     """
     def __init__(self):
@@ -1446,7 +1448,7 @@ class PerMachineDefaultable(PerMachine):
         if self.host == self.build:
             self.host = None
 
-class MachineInfos(PerMachineDefaultable):
+class MachineInfos(PerMachineDefaultable[MachineInfo]):
     def detect_build(self, compilers_per_machine = None):
         compilers = compilers_per_machine.build \
             if compilers_per_machine is not None \

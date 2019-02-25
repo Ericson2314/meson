@@ -14,7 +14,7 @@
 
 """A library of random helper functionality."""
 from pathlib import Path
-from typing import List
+from typing import Generic, List, TypeVar
 import functools
 import sys
 import stat
@@ -320,20 +320,22 @@ class MachineChoice(OrderedEnum):
     HOST = 1
     TARGET = 2
 
-class PerMachine:
-    def __init__(self, build, host, target):
+T = TypeVar('T')
+
+class PerMachine(Generic[T]):
+    def __init__(self, build: T, host: T, target: T):
         self.build = build
         self.host = host
         self.target = target
 
-    def __getitem__(self, machine: MachineChoice):
+    def __getitem__(self, machine: MachineChoice) -> T:
         return {
             MachineChoice.BUILD:  self.build,
             MachineChoice.HOST:   self.host,
             MachineChoice.TARGET: self.target
         }[machine]
 
-    def __setitem__(self, machine: MachineChoice, val):
+    def __setitem__(self, machine: MachineChoice, val: T):
         key = {
             MachineChoice.BUILD:  'build',
             MachineChoice.HOST:   'host',
