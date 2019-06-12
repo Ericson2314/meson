@@ -235,10 +235,17 @@ def list_buildoptions(coredata: cdata.CoreData) -> List[dict]:
     )
     add_keys(optlist, coredata.backend_options, 'backend')
     add_keys(optlist, coredata.base_options, 'base')
-    add_keys(optlist, coredata.compiler_options.host, 'compiler (for host machine)')
     add_keys(
         optlist,
-        {'build.' + k: o for k, o in coredata.compiler_options.build.items()},
+        dict(coredata.flatten_lang_iterator(coredata.compiler_options.host.items())),
+        'compiler (for host machine)',
+    )
+    add_keys(
+        optlist,
+        {
+            'build.' + k: o for k, o in
+            coredata.flatten_lang_iterator(coredata.compiler_options.build.items())
+        },
         'compiler (for build machine)',
     )
     add_keys(optlist, dir_options, 'directory')

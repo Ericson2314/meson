@@ -187,10 +187,17 @@ class Conf:
             {'build.' + k: o for k, o in self.coredata.builtins_per_machine.build.items()})
         self.print_options('Backend options', self.coredata.backend_options)
         self.print_options('Base options', self.coredata.base_options)
-        self.print_options('Compiler options (for host machine)', self.coredata.compiler_options.host)
+        self.print_options(
+            'Compiler options (for host machine)',
+            dict(self.coredata.flatten_lang_iterator(self.coredata.compiler_options.host.items())),
+        )
         self.print_options(
             'Compiler options (for build machine)',
-            {'build.' + k: o for k, o in self.coredata.compiler_options.build.items()})
+            {
+                'build.' + k: o for k, o in
+                self.coredata.flatten_lang_iterator(self.coredata.compiler_options.build.items())
+            },
+        )
         self.print_options('Directories', dir_options)
         self.print_options('Project options', self.coredata.user_options)
         self.print_options('Testing options', test_options)

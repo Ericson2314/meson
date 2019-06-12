@@ -17,7 +17,7 @@ import pickle, os, uuid, shlex
 import sys
 from itertools import chain
 from pathlib import PurePath
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from .mesonlib import (
     MesonException, MachineChoice, PerMachine,
     default_libdir, default_libexecdir, default_prefix
@@ -27,7 +27,7 @@ import ast
 import argparse
 import configparser
 from typing import (
-    Any, Dict, Generic, Iterable, List, Optional, Type, TypeVar, Union
+    Any, Dict, Generic, Iterable, List, Optional, Tuple, Type, TypeVar, Union
 )
 import typing
 import enum
@@ -362,7 +362,7 @@ class CoreData:
         self.init_builtins()
         self.backend_options = {} # : Dict[str, UserOption]
         self.user_options = {} # : Dict[str, UserOption]
-        self.compiler_options = PerMachine({}, {})
+        self.compiler_options = PerMachine(defaultdict(dict), defaultdict(dict)) # : PerMachine[defaultdict[str, Dict[str, UserOption]]]
         self.base_options = {} # : Dict[str, UserOption]
         self.cross_files = self.__load_config_files(options, scratch_dir, 'cross')
         self.compilers = PerMachine(OrderedDict(), OrderedDict())
@@ -572,28 +572,42 @@ class CoreData:
             mode = 'custom'
         self.builtins['buildtype'].set_value(mode)
 
-    @staticmethod
+    @classmethod
     def get_prefixed_options_per_machine(
+        cls,
         options_per_machine # : PerMachine[Dict[str, _V]]]
-    ) -> Iterable[Dict[str, _V]]:
-        for for_machine in iter(MachineChoice):
-            prefix = for_machine.get_prefix()
-            yield {
-                prefix + k: v
-                for k, v in options_per_machine[for_machine].items()
-            }
+    ) -> Iterable[Tuple[str, _V]]:
+        return cls._flatten_pair_iterator(
+            (for_machine.get_prefix(), options_per_machine[for_machine])
+            for for_machine in iter(MachineChoice)
+        )
+
+    @classmethod
+    def flatten_lang_iterator(
+        cls,
+        outer # : Iterable[Tuple[str, Dict[str, _V]]]
+    ) -> Iterable[Tuple[str, _V]]:
+        return cls._flatten_pair_iterator((lang + '_', opts) for lang, opts in outer)
+
+    @staticmethod
+    def _flatten_pair_iterator(
+        outer # : Iterable[Tuple[str, Dict[str, _V]]]
+    ) -> Iterable[Tuple[str, _V]]:
+        for k0, v0 in outer:
+            for k1, v1 in v0.items():
+                yield (k0 + k1, v1)
 
     def _get_all_nonbuiltin_options(self) -> Iterable[Dict[str, UserOption]]:
         yield self.backend_options
         yield self.user_options
-        yield from self.get_prefixed_options_per_machine(self.compiler_options)
+        yield dict(self.flatten_lang_iterator(self.get_prefixed_options_per_machine(self.compiler_options)))
         yield self.base_options
 
-    def _get_all_builtin_options(self) -> Dict[str, UserOption]:
-        yield from self.get_prefixed_options_per_machine(self.builtins_per_machine)
+    def _get_all_builtin_options(self) -> Iterable[Dict[str, UserOption]]:
+        yield dict(self.get_prefixed_options_per_machine(self.builtins_per_machine))
         yield self.builtins
 
-    def get_all_options(self) -> Dict[str, UserOption]:
+    def get_all_options(self) -> Iterable[Dict[str, UserOption]]:
         yield from self._get_all_nonbuiltin_options()
         yield from self._get_all_builtin_options()
 
@@ -610,10 +624,10 @@ class CoreData:
             raise MesonException('Tried to validate unknown option %s.' % option_name)
 
     def get_external_args(self, for_machine: MachineChoice, lang):
-        return self.compiler_options[for_machine][lang + '_args'].value
+        return self.compiler_options[for_machine][lang]['args'].value
 
     def get_external_link_args(self, for_machine: MachineChoice, lang):
-        return self.compiler_options[for_machine][lang + '_link_args'].value
+        return self.compiler_options[for_machine][lang]['link_args'].value
 
     def merge_user_options(self, options):
         for (name, value) in options.items():
@@ -705,15 +719,12 @@ class CoreData:
 
         self.compilers[comp.for_machine][lang] = comp
 
-        optprefix = lang + '_'
         for k, o in comp.get_and_default_options(env.properties[comp.for_machine]).items():
-            if not k.startswith(optprefix):
-                raise MesonException('Internal error, %s has incorrect prefix.' % k)
             # prefixed compiler options affect just this machine
             opt_prefix = comp.for_machine.get_prefix()
             if opt_prefix + k in env.cmd_line_options:
-                o.set_value(env.cmd_line_options[opt_prefix + k])
-            self.compiler_options[comp.for_machine].setdefault(k, o)
+                o.set_value(env.cmd_line_options[opt_prefix + lang + '_' + k])
+            self.compiler_options[comp.for_machine][lang].setdefault(k, o)
 
         enabled_opts = []
         for optname in comp.base_options:

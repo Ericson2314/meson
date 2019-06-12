@@ -37,7 +37,6 @@ import os, shutil, uuid
 import re, shlex
 import subprocess
 from collections import namedtuple
-from itertools import chain
 from pathlib import PurePath
 import functools
 from typing import Sequence, List, Union, Optional, Iterator, Dict, Any
@@ -1037,7 +1036,7 @@ class CompilerHolder(InterpreterObject):
                 args += self.compiler.get_include_args(idir, False)
         if not nobuiltins:
             for_machine = Interpreter.machine_from_native_kwarg(kwargs)
-            opts = self.environment.coredata.compiler_options[for_machine]
+            opts = self.environment.coredata.compiler_options[for_machine][self.compiler.lang]
             args += self.compiler.get_option_compile_args(opts)
             if mode == 'link':
                 args += self.compiler.get_option_link_args(opts)
@@ -2558,11 +2557,12 @@ external dependencies (including libraries) must go to "dependencies".''')
         return result
 
     def get_option_internal(self, optname):
-        for opts in chain(
-                [self.coredata.base_options, compilers.base_options, self.coredata.builtins],
-                self.coredata.get_prefixed_options_per_machine(self.coredata.builtins_per_machine),
-                self.coredata.get_prefixed_options_per_machine(self.coredata.compiler_options),
-        ):
+        for opts in [
+                self.coredata.base_options, compilers.base_options, self.coredata.builtins,
+                dict(self.coredata.get_prefixed_options_per_machine(self.coredata.builtins_per_machine)),
+                dict(self.coredata.flatten_lang_iterator(
+                    self.coredata.get_prefixed_options_per_machine(self.coredata.compiler_options))),
+        ]:
             v = opts.get(optname)
             if v is not None:
                 return v

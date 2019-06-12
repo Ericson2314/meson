@@ -1039,10 +1039,10 @@ class Compiler:
         opts = {} # build afresh every time
         description = 'Extra arguments passed to the {}'.format(self.get_display_language())
         opts.update({
-            self.language + '_args': coredata.UserArrayOption(
+            'args': coredata.UserArrayOption(
                 description + ' compiler',
                 [], shlex_split=True, user_input=True, allow_dups=True),
-            self.language + '_link_args': coredata.UserArrayOption(
+            'link_args': coredata.UserArrayOption(
                 description + ' linker',
                 [], shlex_split=True, user_input=True, allow_dups=True),
         })
@@ -1066,9 +1066,9 @@ class Compiler:
             if k in properties:
                 # Get from configuration files.
                 o.set_value(properties[k])
-            elif k == self.language + '_args':
+            elif k == 'args':
                 o.set_value(compile_args)
-            elif k == self.language + '_link_args':
+            elif k == 'link_args':
                 o.set_value(link_args)
 
         return opts
