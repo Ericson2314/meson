@@ -23,8 +23,13 @@ from ..interpreterbase import InvalidArguments
 from ..build import Executable, Jar, SharedLibrary, SharedModule, StaticLibrary
 from ..mparser import BaseNode, ArithmeticNode, ArrayNode, ElementaryNode, IdNode, FunctionNode, StringNode
 import os
+import typing
 
 build_target_functions = ['executable', 'jar', 'library', 'shared_library', 'shared_module', 'static_library', 'both_libraries']
+
+# TODO classes or something?
+IntrospectionTarget = typing.Dict
+IntrospectionDependency = typing.Dict
 
 class IntrospectionHelper:
     # mimic an argparse namespace
@@ -53,8 +58,8 @@ class IntrospectionInterpreter(AstInterpreter):
         self.backend = backend
         self.default_options = {'backend': self.backend}
         self.project_data = {}
-        self.targets = []
-        self.dependencies = []
+        self.targets = [] # type: typing.List[IntrospectionTarget]
+        self.dependencies = [] # type: typing.List[IntrospectionDependency]
         self.project_node = None
 
         self.funcs.update({

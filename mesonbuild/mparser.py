@@ -15,6 +15,8 @@
 import re
 import codecs
 import types
+import typing
+
 from .mesonlib import MesonException
 from . import mlog
 
@@ -220,21 +222,23 @@ class BaseNode:
             if callable(func):
                 func(self)
 
-class ElementaryNode(BaseNode):
+_T = typing.TypeVar('_T')
+
+class ElementaryNode(BaseNode, typing.Generic[_T]):
     def __init__(self, token):
         self.lineno = token.lineno
         self.subdir = token.subdir
         self.colno = token.colno
-        self.value = token.value
+        self.value = token.value # value: _T
         self.bytespan = token.bytespan
 
-class BooleanNode(ElementaryNode):
+class BooleanNode(ElementaryNode[bool]):
     def __init__(self, token, value):
         super().__init__(token)
         self.value = value
         assert(isinstance(self.value, bool))
 
-class IdNode(ElementaryNode):
+class IdNode(ElementaryNode[str]):
     def __init__(self, token):
         super().__init__(token)
         assert(isinstance(self.value, str))
@@ -242,12 +246,12 @@ class IdNode(ElementaryNode):
     def __str__(self):
         return "Id node: '%s' (%d, %d)." % (self.value, self.lineno, self.colno)
 
-class NumberNode(ElementaryNode):
+class NumberNode(ElementaryNode[int]):
     def __init__(self, token):
         super().__init__(token)
         assert(isinstance(self.value, int))
 
-class StringNode(ElementaryNode):
+class StringNode(ElementaryNode[str]):
     def __init__(self, token):
         super().__init__(token)
         assert(isinstance(self.value, str))
@@ -268,7 +272,7 @@ class ArrayNode(BaseNode):
         self.colno = colno
         self.end_lineno = end_lineno
         self.end_colno = end_colno
-        self.args = args
+        self.args = args # type: ArgumentNode
 
 class DictNode(BaseNode):
     def __init__(self, args, lineno, colno, end_lineno, end_colno):
@@ -277,7 +281,7 @@ class DictNode(BaseNode):
         self.colno = colno
         self.end_lineno = end_lineno
         self.end_colno = end_colno
-        self.args = args
+        self.args = args # type: ArgumentNode
 
 class EmptyNode(BaseNode):
     def __init__(self, lineno, colno):
@@ -350,7 +354,7 @@ class MethodNode(BaseNode):
         self.source_object = source_object
         self.name = name
         assert(isinstance(self.name, str))
-        self.args = args
+        self.args = args # type: ArgumentNode
 
 class FunctionNode(BaseNode):
     def __init__(self, subdir, lineno, colno, end_lineno, end_colno, func_name, args):
@@ -361,7 +365,7 @@ class FunctionNode(BaseNode):
         self.end_colno = end_colno
         self.func_name = func_name
         assert(isinstance(func_name, str))
-        self.args = args
+        self.args = args # type: ArgumentNode
 
 class AssignmentNode(BaseNode):
     def __init__(self, subdir, lineno, colno, var_name, value):

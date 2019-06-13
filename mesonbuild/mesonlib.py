@@ -32,7 +32,7 @@ _U = typing.TypeVar('_U')
 have_fcntl = False
 have_msvcrt = False
 # {subproject: project_meson_version}
-project_meson_versions = {}
+project_meson_versions = {} # type: typing.Dict[str, str]
 
 try:
     import fcntl
@@ -53,7 +53,7 @@ if os.path.basename(sys.executable) == 'meson.exe':
     python_command = [sys.executable, 'runpython']
 else:
     python_command = [sys.executable]
-meson_command = None
+meson_command = None # type: typing.Optional[typing.List[str]]
 
 def set_meson_command(mainfile):
     global python_command

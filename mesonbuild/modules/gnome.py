@@ -19,6 +19,7 @@ import os
 import copy
 import shlex
 import subprocess
+import typing
 
 from .. import build
 from .. import mlog
@@ -42,14 +43,13 @@ from ..interpreterbase import noKwargs, permittedKwargs, FeatureNew, FeatureNewK
 # https://bugzilla.gnome.org/show_bug.cgi?id=774368
 gresource_dep_needed_version = '>= 2.51.1'
 
-native_glib_version = None
+native_glib_version = None # type: typing.Optional[PkgConfigDependency]
 girwarning_printed = False
 gdbuswarning_printed = False
 gresource_warning_printed = False
-_gir_has_option = {}
+_gir_has_option = {} # type: typing.Dict[str, bool]
 
 def gir_has_option(intr_obj, option):
-    global _gir_has_option
     if option in _gir_has_option:
         return _gir_has_option[option]
 
@@ -64,7 +64,7 @@ def gir_has_option(intr_obj, option):
     return _gir_has_option[option]
 
 class GnomeModule(ExtensionModule):
-    gir_dep = None
+    gir_dep = None # type: typing.Optional[PkgConfigDependency]
 
     @staticmethod
     def _get_native_glib_version(state):
@@ -430,14 +430,16 @@ class GnomeModule(ExtensionModule):
 
     def _get_gir_dep(self, state):
         try:
-            gir_dep = self.gir_dep or PkgConfigDependency('gobject-introspection-1.0',
-                                                          state.environment,
-                                                          {'native': True})
+            self.gir_dep = self.gir_dep or PkgConfigDependency(
+                'gobject-introspection-1.0',
+                state.environment,
+                {'native': True},
+            )
             pkgargs = gir_dep.get_compile_args()
         except Exception:
             raise MesonException('gobject-introspection dependency was not found, gir cannot be generated.')
 
-        return gir_dep, pkgargs
+        return self.gir_dep, pkgargs
 
     def _scan_header(self, kwargs):
         ret = []
@@ -754,7 +756,7 @@ class GnomeModule(ExtensionModule):
         if len(girtargets) > 1 and any([isinstance(el, build.Executable) for el in girtargets]):
             raise MesonException('generate_gir only accepts a single argument when one of the arguments is an executable')
 
-        self.gir_dep, pkgargs = self._get_gir_dep(state)
+        _, pkgargs = self._get_gir_dep(state)
 
         ns = kwargs.pop('namespace')
         nsversion = kwargs.pop('nsversion')

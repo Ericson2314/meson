@@ -156,7 +156,7 @@ def get_backend_from_name(backend, build):
 
 # This class contains the basic functionality that is needed by all backends.
 # Feel free to move stuff in and out of it as you see fit.
-class Backend:
+class Backend(metaclass=ABCMeta):
     def __init__(self, build):
         # Make it possible to construct a dummy backend
         # This is used for introspection without a build directory
@@ -169,6 +169,9 @@ class Backend:
         self.source_dir = self.environment.get_source_dir()
         self.build_to_src = mesonlib.relpath(self.environment.get_source_dir(),
                                              self.environment.get_build_dir())
+
+    @property
+    @abstractmethod
 
     def get_target_filename(self, t):
         if isinstance(t, build.CustomTarget):

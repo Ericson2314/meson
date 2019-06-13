@@ -106,17 +106,17 @@ class ConverterTarget:
         if target.install_paths:
             self.install_dir = target.install_paths[0]
 
-        self.languages = []
-        self.sources = []
-        self.generated = []
-        self.includes = []
-        self.link_with = []
-        self.object_libs = []
-        self.compile_opts = {}
+        self.languages = [] # type: List[str]
+        self.sources = [] # type: List[str]
+        self.generated = [] # type: List[str]
+        self.includes = [] # type: List[str]
+        self.link_with = [] # type: List[str]
+        self.object_libs = [] # type: List[ConverterTarget]
+        self.compile_opts = {} # type: Dict[str, List[str]]
         self.pie = False
 
         # Project default override options (c_std, cpp_std, etc.)
-        self.override_options = []
+        self.override_options = [] # type: List[str]
 
         for i in target.files:
             # Determine the meson language
@@ -151,7 +151,7 @@ class ConverterTarget:
             if i not in self.compile_opts:
                 continue
 
-            temp = []
+            temp = [] # type: List[str]
             for j in self.compile_opts[i]:
                 m = ConverterTarget.std_regex.match(j)
                 if m:
@@ -201,13 +201,9 @@ class ConverterTarget:
             return x
 
         build_dir_rel = os.path.relpath(self.build_dir, os.path.join(self.env.get_build_dir(), subdir))
-        self.includes = list(set([rel_path(x, True) for x in set(self.includes)] + [build_dir_rel]))
-        self.sources = [rel_path(x, False) for x in self.sources]
-        self.generated = [rel_path(x, False) for x in self.generated]
-
-        self.includes = [x for x in self.includes if x is not None]
-        self.sources = [x for x in self.sources if x is not None]
-        self.generated = [x for x in self.generated if x is not None]
+        self.includes = list(set([y for y in (rel_path(x, True) for x in set(self.includes + [build_dir_rel])) if y is not None]))
+        self.sources = [y for y in (rel_path(x, False) for x in self.sources) if y is not None]
+        self.generated = [y for y in (rel_path(x, False) for x in self.generated) if y is not None]
 
         # Filter out files that are not supported by the language
         supported = list(header_suffixes) + list(obj_suffixes)
@@ -253,7 +249,7 @@ class ConverterTarget:
         # Filter out object files from the sources
         self.generated = [x for x in self.generated if not any([x.endswith('.' + y) for y in obj_suffixes])]
 
-    def meson_func(self) -> str:
+    def meson_func(self) -> Optional[str]:
         return target_type_map.get(self.type.upper())
 
     def log(self) -> None:

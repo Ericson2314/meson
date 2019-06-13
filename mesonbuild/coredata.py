@@ -360,10 +360,10 @@ class CoreData:
         self.target_guids = {}
         self.version = version
         self.init_builtins()
-        self.backend_options = {} # : Dict[str, UserOption]
-        self.user_options = {} # : Dict[str, UserOption]
-        self.compiler_options = PerMachine(defaultdict(dict), defaultdict(dict)) # : PerMachine[defaultdict[str, Dict[str, UserOption]]]
-        self.base_options = {} # : Dict[str, UserOption]
+        self.backend_options = {} # type: Dict[str, UserOption]
+        self.user_options = {} # type: Dict[str, UserOption]
+        self.compiler_options = PerMachine(defaultdict(dict), defaultdict(dict)) # type: PerMachine[defaultdict[str, Dict[str, UserOption]]]
+        self.base_options = {} # type: Dict[str, UserOption]
         self.cross_files = self.__load_config_files(options, scratch_dir, 'cross')
         self.compilers = PerMachine(OrderedDict(), OrderedDict())
 
@@ -542,7 +542,7 @@ class CoreData:
             debug = True
         elif value == 'debugoptimized':
             opt = '2'
-            debug = True
+           debug = True
         elif value == 'release':
             opt = '3'
             debug = False
@@ -575,7 +575,7 @@ class CoreData:
     @classmethod
     def get_prefixed_options_per_machine(
         cls,
-        options_per_machine # : PerMachine[Dict[str, _V]]]
+        options_per_machine # type: PerMachine[Dict[str, _V]]
     ) -> Iterable[Tuple[str, _V]]:
         return cls._flatten_pair_iterator(
             (for_machine.get_prefix(), options_per_machine[for_machine])
@@ -585,13 +585,13 @@ class CoreData:
     @classmethod
     def flatten_lang_iterator(
         cls,
-        outer # : Iterable[Tuple[str, Dict[str, _V]]]
+        outer # type: Iterable[Tuple[str, Dict[str, _V]]]
     ) -> Iterable[Tuple[str, _V]]:
         return cls._flatten_pair_iterator((lang + '_', opts) for lang, opts in outer)
 
     @staticmethod
     def _flatten_pair_iterator(
-        outer # : Iterable[Tuple[str, Dict[str, _V]]]
+        outer # type: Iterable[Tuple[str, Dict[str, _V]]]
     ) -> Iterable[Tuple[str, _V]]:
         for k0, v0 in outer:
             for k1, v1 in v0.items():
@@ -715,7 +715,9 @@ class CoreData:
         self.set_options(options, subproject)
 
     def process_new_compiler(self, lang: str, comp, env):
+        from . import environent
         from . import compilers
+        assert isinstance(env, environent.Environent)
 
         self.compilers[comp.for_machine][lang] = comp
 
@@ -871,7 +873,6 @@ def parse_cmd_line_options(args):
             args.cmd_line_options[name] = value
             delattr(args, name)
 
-
 _U = TypeVar('_U', bound=UserOption[_T])
 
 class BuiltinOption(Generic[_T, _U]):
@@ -977,12 +978,12 @@ builtin_options = OrderedDict([
     ('warning_level',   BuiltinOption(UserComboOption, 'Compiler warning level to use', '1', choices=['0', '1', '2', '3'])),
     ('werror',          BuiltinOption(UserBooleanOption, 'Treat warnings as errors', False)),
     ('wrap_mode',       BuiltinOption(UserComboOption, 'Wrap mode', 'default', choices=['default', 'nofallback', 'nodownload', 'forcefallback'])),
-])
+]) # type: OrderedDict[str, BuiltinOption]
 
 builtin_options_per_machine = OrderedDict([
     ('pkg_config_path', BuiltinOption(UserArrayOption, 'List of additional paths for pkg-config to search', [])),
     ('cmake_prefix_path', BuiltinOption(UserArrayOption, 'List of additional prefixes for cmake to search', [])),
-])
+]) # type: OrderedDict[str, BuiltinOption]
 
 # Special prefix-dependent defaults for installation directories that reside in
 # a path outside of the prefix in FHS and common usage.

@@ -17,6 +17,9 @@
 
 import json
 import os
+import typing
+if typing.TYPE_CHECKING:
+    from typing_extensions import Literal
 
 from . import ExtensionModule
 
@@ -33,7 +36,7 @@ from ..dependencies.base import (
 from ..interpreter import DependencyHolder
 
 class DlangModule(ExtensionModule):
-    class_dubbin = None
+    class_dubbin = None # type: typing.Union[ExternalProgram, Literal[False], None]
     init_dub = False
 
     def __init__(self, interpreter):
@@ -42,16 +45,8 @@ class DlangModule(ExtensionModule):
 
     def _init_dub(self):
         if DlangModule.class_dubbin is None:
-            self.dubbin = DubDependency.class_dubbin
-            DlangModule.class_dubbin = self.dubbin
-        else:
-            self.dubbin = DlangModule.class_dubbin
-
-        if DlangModule.class_dubbin is None:
-            self.dubbin = self.check_dub()
-            DlangModule.class_dubbin = self.dubbin
-        else:
-            self.dubbin = DlangModule.class_dubbin
+            DlangModule.class_dubbin = self.check_dub()
+        self.dubbin = DlangModule.class_dubbin
 
         if not self.dubbin:
             if not self.dubbin:

@@ -218,7 +218,7 @@ class CLikeCompiler:
         return ()
 
     @functools.lru_cache()
-    def get_library_dirs(self, env, elf_class = None):
+    def get_library_dirs(self, env, elf_class = None) -> Tuple[str, ...]:
         dirs = self.get_compiler_dirs(env, 'libraries')
         if elf_class is None or elf_class == 0:
             return dirs

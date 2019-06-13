@@ -14,6 +14,7 @@
 import re
 import os, os.path, pathlib
 import shutil
+import typing
 
 from . import ExtensionModule, ModuleReturnValue
 
@@ -102,7 +103,7 @@ class CMakeSubprojectHolder(InterpreterObject, ObjectHolder):
 
 class CmakeModule(ExtensionModule):
     cmake_detected = False
-    cmake_root = None
+    cmake_root = None # type: typing.Optional[str]
 
     def __init__(self, interpreter):
         super().__init__(interpreter)

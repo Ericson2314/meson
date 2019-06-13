@@ -13,24 +13,28 @@
 # limitations under the License.
 
 import sys, pickle, os, shutil, subprocess, errno
-import shlex
 from glob import glob
+import shlex
+import typing
+
 from .scripts import depfixer
 from .scripts import destdir_join
 from .mesonlib import is_windows, Popen_safe
 from .mtest import rebuild_all
+
 try:
-    from __main__ import __file__ as main_file
+    from __main__ import __file__ as main_file_0
 except ImportError:
     # Happens when running as meson.exe which is native Windows.
     # This is only used for pkexec which is not, so this is fine.
-    main_file = None
+    main_file_0 = None
+main_file = main_file_0 # type: typing.Optional[str]
 
 symlink_warning = '''Warning: trying to copy a symlink that points to a file. This will copy the file,
 but this will be changed in a future version of Meson to copy the symlink as is. Please update your
 build definitions so that it will not break when the change happens.'''
 
-selinux_updates = []
+selinux_updates = [] # type: typing.List[str]
 
 def add_arguments(parser):
     parser.add_argument('-C', default='.', dest='wd',
@@ -83,15 +87,15 @@ def append_to_log(lf, line):
 def set_chown(path, user=None, group=None, dir_fd=None, follow_symlinks=True):
     # shutil.chown will call os.chown without passing all the parameters
     # and particularly follow_symlinks, thus we replace it temporary
-    # with a lambda with all the parameters so that follow_symlinks will
+    # with a wrapper function with all the parameters so that follow_symlinks will
     # be actually passed properly.
     # Not nice, but better than actually rewriting shutil.chown until
     # this python bug is fixed: https://bugs.python.org/issue18108
     real_os_chown = os.chown
     try:
-        os.chown = lambda p, u, g: real_os_chown(p, u, g,
-                                                 dir_fd=dir_fd,
-                                                 follow_symlinks=follow_symlinks)
+        def wrap_os_chown(p: str, u: str, g: str):
+            real_os_chown(p, u, g, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
+        os.chown = wrap_os_chown
         shutil.chown(path, user, group)
     except Exception:
         raise

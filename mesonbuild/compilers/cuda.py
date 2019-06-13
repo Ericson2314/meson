@@ -1,3 +1,4 @@
+
 # Copyright 2012-2017 The Meson development team
 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,6 +14,7 @@
 # limitations under the License.
 
 import re, os.path
+from typing import List
 
 from .. import mlog
 from ..mesonlib import EnvironmentException, MachineChoice, Popen_safe
@@ -27,7 +29,7 @@ class CudaCompiler(Compiler):
         self.is_cross = is_cross
         self.exe_wrapper = exe_wrapper
         self.id = 'nvcc'
-        default_warn_args = []
+        default_warn_args = [] # type: List[str]
         self.warn_args = {'0': [],
                           '1': default_warn_args,
                           '2': default_warn_args + ['-Xcompiler=-Wextra'],

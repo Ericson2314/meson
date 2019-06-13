@@ -18,25 +18,26 @@ import argparse
 import pickle
 import platform
 import subprocess
+import typing
 
 from .. import mesonlib
 
-options = None
+options = None # type: typing.Optional[argparse.Namespace]
 
-def buildparser():
+def buildparser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('args', nargs='+')
     return parser
 
-def is_windows():
+def is_windows() -> bool:
     platname = platform.system().lower()
     return platname == 'windows' or 'mingw' in platname
 
-def is_cygwin():
+def is_cygwin() -> bool:
     platname = platform.system().lower()
     return 'cygwin' in platname
 
-def run_with_mono(fname):
+def run_with_mono(fname) -> bool:
     if fname.endswith('.exe') and not (is_windows() or is_cygwin()):
         return True
     return False

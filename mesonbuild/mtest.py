@@ -873,6 +873,9 @@ Timeout:            %4d
         if namebase:
             logfile_base += '-' + namebase.replace(' ', '_')
         self.logfilename = logfile_base + '.txt'
+        # TODO mypy was having trouble with previous line
+        if typing.TYPE_CHECKING:
+            assert self.logfilename is not None
         self.jsonlogfilename = logfile_base + '.json'
 
         self.jsonlogfile = open(self.jsonlogfilename, 'w', encoding='utf-8', errors='replace')

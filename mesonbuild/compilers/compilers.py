@@ -14,7 +14,7 @@
 
 import abc, contextlib, enum, os.path, re, tempfile, shlex
 import subprocess
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from ..linkers import StaticLinker
 from .. import coredata
@@ -52,7 +52,8 @@ lang_suffixes = {
     'cs': ('cs',),
     'swift': ('swift',),
     'java': ('java',),
-}
+} # type: Dict[str, tuple]
+
 all_languages = lang_suffixes.keys()
 cpp_suffixes = lang_suffixes['cpp'] + ('h',)
 c_suffixes = lang_suffixes['c'] + ('h',)
@@ -62,9 +63,7 @@ clib_langs = ('objcpp', 'cpp', 'objc', 'c', 'fortran',)
 # List of languages that can be linked with C code directly by the linker
 # used in build.py:process_compilers() and build.py:get_dynamic_linker()
 clink_langs = ('d', 'cuda') + clib_langs
-clink_suffixes = ()
-for _l in clink_langs + ('vala',):
-    clink_suffixes += lang_suffixes[_l]
+clink_suffixes = tuple(lang_suffixes[_l] for _l in clink_langs + ('vala',))
 clink_suffixes += ('h', 'll', 's')
 
 # Languages that should use LDFLAGS arguments when linking.
@@ -72,15 +71,17 @@ languages_using_ldflags = ('objcpp', 'cpp', 'objc', 'c', 'fortran', 'd', 'cuda')
 soregex = re.compile(r'.*\.so(\.[0-9]+)?(\.[0-9]+)?(\.[0-9]+)?$')
 
 # Environment variables that each lang uses.
-cflags_mapping = {'c': 'CFLAGS',
-                  'cpp': 'CXXFLAGS',
-                  'cuda': 'CUFLAGS',
-                  'objc': 'OBJCFLAGS',
-                  'objcpp': 'OBJCXXFLAGS',
-                  'fortran': 'FFLAGS',
-                  'd': 'DFLAGS',
-                  'vala': 'VALAFLAGS',
-                  'rust': 'RUSTFLAGS'}
+cflags_mapping = {
+    'c': 'CFLAGS',
+    'cpp': 'CXXFLAGS',
+    'cuda': 'CUFLAGS',
+    'objc': 'OBJCFLAGS',
+    'objcpp': 'OBJCXXFLAGS',
+    'fortran': 'FFLAGS',
+    'd': 'DFLAGS',
+    'vala': 'VALAFLAGS',
+    'rust': 'RUSTFLAGS'
+} # type: Dict[str, str]
 
 # execinfo is a compiler lib on BSD
 unixy_compiler_internal_libs = ('m', 'c', 'pthread', 'dl', 'rt', 'execinfo')
@@ -142,7 +143,7 @@ gnulike_buildtype_args = {'plain': [],
                           'release': [],
                           'minsize': [],
                           'custom': [],
-                          }
+                          } # type: Dict[str, List[str]]
 
 armclang_buildtype_args = {'plain': [],
                            'debug': ['-O0', '-g'],
@@ -150,14 +151,14 @@ armclang_buildtype_args = {'plain': [],
                            'release': ['-Os'],
                            'minsize': ['-Oz'],
                            'custom': [],
-                           }
+                           } # type: Dict[str, List[str]]
 
 cuda_buildtype_args = {'plain': [],
                        'debug': [],
                        'debugoptimized': [],
                        'release': [],
                        'minsize': [],
-                       }
+                       } # type: Dict[str, List[str]]
 
 arm_buildtype_args = {'plain': [],
                       'debug': ['-O0', '--debug'],
@@ -165,7 +166,7 @@ arm_buildtype_args = {'plain': [],
                       'release': ['-O3', '-Otime'],
                       'minsize': ['-O3', '-Ospace'],
                       'custom': [],
-                      }
+                      } # type: Dict[str, List[str]]
 
 ccrx_buildtype_args = {'plain': [],
                        'debug': [],
@@ -173,7 +174,7 @@ ccrx_buildtype_args = {'plain': [],
                        'release': [],
                        'minsize': [],
                        'custom': [],
-                       }
+                       } # type: Dict[str, List[str]]
 
 msvc_buildtype_args = {'plain': [],
                        'debug': ["/ZI", "/Ob0", "/Od", "/RTC1"],
@@ -181,7 +182,7 @@ msvc_buildtype_args = {'plain': [],
                        'release': ["/Ob2", "/Gw"],
                        'minsize': ["/Zi", "/Gw"],
                        'custom': [],
-                       }
+                       } # type: Dict[str, List[str]]
 
 pgi_buildtype_args = {'plain': [],
                       'debug': [],
@@ -189,14 +190,14 @@ pgi_buildtype_args = {'plain': [],
                       'release': [],
                       'minsize': [],
                       'custom': [],
-                      }
+                      } # type: Dict[str, List[str]]
 apple_buildtype_linker_args = {'plain': [],
                                'debug': [],
                                'debugoptimized': [],
                                'release': [],
                                'minsize': [],
                                'custom': [],
-                               }
+                               } # type: Dict[str, List[str]]
 
 gnulike_buildtype_linker_args = {'plain': [],
                                  'debug': [],
@@ -204,7 +205,7 @@ gnulike_buildtype_linker_args = {'plain': [],
                                  'release': ['-Wl,-O1'],
                                  'minsize': [],
                                  'custom': [],
-                                 }
+                                 } # type: Dict[str, List[str]]
 
 arm_buildtype_linker_args = {'plain': [],
                              'debug': [],
@@ -212,7 +213,7 @@ arm_buildtype_linker_args = {'plain': [],
                              'release': [],
                              'minsize': [],
                              'custom': [],
-                             }
+                             } # type: Dict[str, List[str]]
 
 ccrx_buildtype_linker_args = {'plain': [],
                               'debug': [],
@@ -220,14 +221,14 @@ ccrx_buildtype_linker_args = {'plain': [],
                               'release': [],
                               'minsize': [],
                               'custom': [],
-                              }
+                              } # type: Dict[str, List[str]]
 pgi_buildtype_linker_args = {'plain': [],
                              'debug': [],
                              'debugoptimized': [],
                              'release': [],
                              'minsize': [],
                              'custom': [],
-                             }
+                             } # type: Dict[str, List[str]]
 
 msvc_buildtype_linker_args = {'plain': [],
                               'debug': [],
@@ -238,7 +239,7 @@ msvc_buildtype_linker_args = {'plain': [],
                               'release': ['/OPT:REF'],
                               'minsize': ['/INCREMENTAL:NO', '/OPT:REF'],
                               'custom': [],
-                              }
+                              } # type: Dict[str, List[str]]
 
 java_buildtype_args = {'plain': [],
                        'debug': ['-g'],
@@ -246,7 +247,7 @@ java_buildtype_args = {'plain': [],
                        'release': [],
                        'minsize': [],
                        'custom': [],
-                       }
+                       } # type: Dict[str, List[str]]
 
 rust_buildtype_args = {'plain': [],
                        'debug': [],
@@ -254,7 +255,7 @@ rust_buildtype_args = {'plain': [],
                        'release': [],
                        'minsize': [],
                        'custom': [],
-                       }
+                       } # type: Dict[str, List[str]]
 
 d_gdc_buildtype_args = {'plain': [],
                         'debug': [],
@@ -262,7 +263,7 @@ d_gdc_buildtype_args = {'plain': [],
                         'release': ['-frelease', '-finline-functions'],
                         'minsize': [],
                         'custom': [],
-                        }
+                        } # type: Dict[str, List[str]]
 
 d_ldc_buildtype_args = {'plain': [],
                         'debug': [],
@@ -270,7 +271,7 @@ d_ldc_buildtype_args = {'plain': [],
                         'release': ['-release', '-enable-inlining', '-Hkeep-all-bodies'],
                         'minsize': [],
                         'custom': [],
-                        }
+                        } # type: Dict[str, List[str]]
 
 d_dmd_buildtype_args = {'plain': [],
                         'debug': [],
@@ -278,7 +279,7 @@ d_dmd_buildtype_args = {'plain': [],
                         'release': ['-release', '-inline'],
                         'minsize': [],
                         'custom': [],
-                        }
+                        } # type: Dict[str, List[str]]
 
 mono_buildtype_args = {'plain': [],
                        'debug': [],
@@ -286,7 +287,7 @@ mono_buildtype_args = {'plain': [],
                        'release': ['-optimize+'],
                        'minsize': [],
                        'custom': [],
-                       }
+                       } # type: Dict[str, List[str]]
 
 swift_buildtype_args = {'plain': [],
                         'debug': [],
@@ -294,7 +295,7 @@ swift_buildtype_args = {'plain': [],
                         'release': [],
                         'minsize': [],
                         'custom': [],
-                        }
+                        } # type: Dict[str, List[str]]
 
 gnu_winlibs = ['-lkernel32', '-luser32', '-lgdi32', '-lwinspool', '-lshell32',
                '-lole32', '-loleaut32', '-luuid', '-lcomdlg32', '-ladvapi32']
@@ -866,10 +867,10 @@ class CompilerArgs(list):
 class Compiler:
     # Libraries to ignore in find_library() since they are provided by the
     # compiler or the C library. Currently only used for MSVC.
-    ignore_libs = ()
+    ignore_libs = () # type: typing.Tuple[str, ...]
     # Libraries that are internal compiler implementations, and must not be
     # manually searched.
-    internal_libs = ()
+    internal_libs = () # type: typing.Tuple[str, ...]
 
     def __init__(self, exelist, version, for_machine: MachineChoice, **kwargs):
         if isinstance(exelist, str):
@@ -926,7 +927,7 @@ class Compiler:
     def get_define(self, dname, prefix, env, extra_args, dependencies) -> Tuple[str, bool]:
         raise EnvironmentException('%s does not support get_define ' % self.get_id())
 
-    def compute_int(self, expression, low, high, guess, prefix, env, extra_args, dependencies) -> int:
+    def compute_int(self, expression, low, high, guess, prefix, env, *, extra_args=None, dependencies=None) -> int:
         raise EnvironmentException('%s does not support compute_int ' % self.get_id())
 
     def compute_parameters_with_absolute_paths(self, parameter_list, build_dir):
@@ -944,10 +945,10 @@ class Compiler:
     def get_exelist(self):
         return self.exelist[:]
 
-    def get_builtin_define(self, *args, **kwargs):
+    def get_builtin_define(self, define: str):
         raise EnvironmentException('%s does not support get_builtin_define.' % self.id)
 
-    def has_builtin_define(self, *args, **kwargs):
+    def has_builtin_define(self, define: str):
         raise EnvironmentException('%s does not support has_builtin_define.' % self.id)
 
     def get_always_args(self):
@@ -1035,7 +1036,7 @@ class Compiler:
 
         return compile_flags, link_flags
 
-    def get_options(self):
+    def get_options(self) -> coredata.UserOption:
         opts = {} # build afresh every time
         description = 'Extra arguments passed to the {}'.format(self.get_display_language())
         opts.update({
@@ -1079,31 +1080,31 @@ class Compiler:
     def get_option_link_args(self, options):
         return []
 
-    def check_header(self, *args, **kwargs) -> Tuple[bool, bool]:
+    def check_header(self, hname, prefix, env, *, extra_args=None, dependencies=None) -> Tuple[bool, bool]:
         raise EnvironmentException('Language %s does not support header checks.' % self.get_display_language())
 
-    def has_header(self, *args, **kwargs) -> Tuple[bool, bool]:
+    def has_header(self, hname, prefix, env, *, extra_args=None, dependencies=None, disable_cache=False) -> Tuple[bool, bool]:
         raise EnvironmentException('Language %s does not support header checks.' % self.get_display_language())
 
-    def has_header_symbol(self, *args, **kwargs) -> Tuple[bool, bool]:
+    def has_header_symbol(self, hname, symbol, prefix, env, *, extra_args=None, dependencies=None) -> Tuple[bool, bool]:
         raise EnvironmentException('Language %s does not support header symbol checks.' % self.get_display_language())
 
-    def compiles(self, *args, **kwargs) -> Tuple[bool, bool]:
+    def compiles(self, code, env, *, extra_args=None, dependencies=None, mode='compile', disable_cache=False) -> Tuple[bool, bool]:
         raise EnvironmentException('Language %s does not support compile checks.' % self.get_display_language())
 
-    def links(self, *args, **kwargs) -> Tuple[bool, bool]:
+    def links(self, code, env, *, extra_args=None, dependencies=None, disable_cache=False) -> Tuple[bool, bool]:
         raise EnvironmentException('Language %s does not support link checks.' % self.get_display_language())
 
-    def run(self, *args, **kwargs) -> RunResult:
+    def run(self, code: str, env, *, extra_args=None, dependencies=None) -> RunResult:
         raise EnvironmentException('Language %s does not support run checks.' % self.get_display_language())
 
-    def sizeof(self, *args, **kwargs) -> int:
+    def sizeof(self, typename, prefix, env, *, extra_args=None, dependencies=None) -> int:
         raise EnvironmentException('Language %s does not support sizeof checks.' % self.get_display_language())
 
-    def alignment(self, *args, **kwargs) -> int:
+    def alignment(self, typename, prefix, env, *, extra_args=None, dependencies=None) -> int:
         raise EnvironmentException('Language %s does not support alignment checks.' % self.get_display_language())
 
-    def has_function(self, *args, **kwargs) -> Tuple[bool, bool]:
+    def has_function(self, funcname, prefix, env, *, extra_args=None, dependencies=None) -> Tuple[bool, bool]:
         raise EnvironmentException('Language %s does not support function checks.' % self.get_display_language())
 
     @classmethod
@@ -1111,10 +1112,11 @@ class Compiler:
         "Always returns a copy that can be independently mutated"
         return args[:]
 
-    def find_library(self, *args, **kwargs):
+    def find_library(self, libname, env, extra_dirs, libtype: LibType = LibType.PREFER_SHARED):
         raise EnvironmentException('Language {} does not support library finding.'.format(self.get_display_language()))
 
-    def get_library_dirs(self, *args, **kwargs):
+    @functools.lru_cache() # needed to appease mypy
+    def get_library_dirs(self, env, elf_class = None) -> Tuple[str, ...]:
         return ()
 
     def get_program_dirs(self, *args, **kwargs):
@@ -1547,7 +1549,7 @@ class VisualStudioLikeCompiler(metaclass=abc.ABCMeta):
     std_warn_args = ['/W3']
     std_opt_args = ['/O2']
     ignore_libs = unixy_compiler_internal_libs
-    internal_libs = ()
+    internal_libs = () # type: typing.Tuple[str, ...]
 
     crt_args = {'none': [],
                 'md': ['/MD'],
@@ -1591,7 +1593,7 @@ class VisualStudioLikeCompiler(metaclass=abc.ABCMeta):
         """
         return ['/MDd']
 
-    def get_buildtype_args(self, buildtype):
+    def get_buildtype_args(self, buildtype: str) -> List[str]:
         args = msvc_buildtype_args[buildtype]
         if self.id == 'msvc' and version_compare(self.version, '<18.0'):
             args = [arg for arg in args if arg != '/Gw']
@@ -1691,6 +1693,7 @@ class VisualStudioLikeCompiler(metaclass=abc.ABCMeta):
         "The name of the outputted import library"
         return ['/IMPLIB:' + implibname]
 
+    @functools.lru_cache() # needed to appease mypy
     def build_rpath_args(self, build_dir, from_dir, rpath_paths, build_rpath, install_rpath):
         return []
 
@@ -2260,6 +2263,7 @@ class ArmclangCompiler:
         return []
 
     # Override CCompiler.build_rpath_args
+    @functools.lru_cache() # needed to appease mypy
     def build_rpath_args(self, build_dir, from_dir, rpath_paths, build_rpath, install_rpath):
         return []
 

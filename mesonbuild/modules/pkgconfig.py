@@ -14,6 +14,7 @@
 
 import os, types
 from pathlib import PurePath
+import typing
 
 from .. import build
 from .. import dependencies
@@ -23,7 +24,7 @@ from . import ModuleReturnValue
 from . import ExtensionModule
 from ..interpreterbase import permittedKwargs, FeatureNew, FeatureNewKwargs
 
-already_warned_objs = set()
+already_warned_objs = set() # type: typing.Set[typing.Tuple[str, typing.Any]]
 
 class DependenciesHelper:
     def __init__(self, name):

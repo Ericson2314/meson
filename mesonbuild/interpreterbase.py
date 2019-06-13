@@ -19,6 +19,7 @@ from . import mparser, mesonlib, mlog
 from . import environment, dependencies
 
 import os, copy, re
+import typing
 from functools import wraps
 
 class ObjectHolder:
@@ -236,7 +237,7 @@ class FeatureNew(FeatureCheckBase):
     # Class variable, shared across all instances
     #
     # Format: {subproject: {feature_version: set(feature_names)}}
-    feature_registry = {}
+    feature_registry = {} # type: typing.Dict[str, typing.Dict[str, typing.Set[str]]]
 
     @staticmethod
     def get_warning_str_prefix(tv):
@@ -251,7 +252,7 @@ class FeatureDeprecated(FeatureCheckBase):
     # Class variable, shared across all instances
     #
     # Format: {subproject: {feature_version: set(feature_names)}}
-    feature_registry = {}
+    feature_registry = {} # type: typing.Dict[str, typing.Dict[str, typing.Set[str]]]
 
     @staticmethod
     def get_warning_str_prefix(tv):

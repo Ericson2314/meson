@@ -116,7 +116,7 @@ def find_coverage_tools():
 
     return gcovr_exe, gcovr_new_rootdir, lcov_exe, genhtml_exe
 
-def detect_ninja(version: str = '1.5', log: bool = False) -> str:
+def detect_ninja(version: str = '1.5', log: bool = False) -> typing.Optional[str]:
     env_ninja = os.environ.get('NINJA', None)
     for n in [env_ninja] if env_ninja else ['ninja', 'ninja-build', 'samu']:
         try:
@@ -128,7 +128,7 @@ def detect_ninja(version: str = '1.5', log: bool = False) -> str:
         # Perhaps we should add a way for the caller to know the failure mode
         # (not found or too old)
         if p.returncode == 0 and mesonlib.version_compare(found, '>=' + version):
-            n = shutil.which(n)
+            n_abs = shutil.which(n)
             if log:
                 name = os.path.basename(n)
                 if name.endswith('-' + found):
@@ -138,7 +138,8 @@ def detect_ninja(version: str = '1.5', log: bool = False) -> str:
                 if name == 'samu':
                     name = 'samurai'
                 mlog.log('Found {}-{} at {}'.format(name, found, shlex.quote(n)))
-            return n
+            return n_abs
+    return None
 
 def detect_native_windows_arch():
     """
@@ -1094,7 +1095,7 @@ class Environment:
         full_version = out.split('\n', 1)[0]
 
         # Detect the target architecture, required for proper architecture handling on Windows.
-        c_compiler = {}
+        c_compiler = {} # type: CompilersDict
         is_msvc = mesonlib.is_windows() and 'VCINSTALLDIR' in os.environ
         if is_msvc:
             c_compiler = {'c': self.detect_c_compiler(for_machine)} # MSVC compiler is required for correct platform detection.

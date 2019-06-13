@@ -23,7 +23,11 @@
 # - move targets
 # - reindent?
 
-from .ast import IntrospectionInterpreter, build_target_functions, AstConditionLevel, AstIDGenerator, AstIndentationGenerator, AstPrinter
+from .ast import (
+    AstConditionLevel, AstIDGenerator, AstIndentationGenerator, AstPrinter,
+    IntrospectionInterpreter, build_target_functions,
+)
+from .ast.introspection import IntrospectionTarget
 from mesonbuild.mesonlib import MesonException
 from . import mlog, environment
 from functools import wraps
@@ -353,15 +357,15 @@ class Rewriter:
         self.sourcedir = sourcedir
         self.interpreter = IntrospectionInterpreter(sourcedir, '', generator, visitors = [AstIDGenerator(), AstIndentationGenerator(), AstConditionLevel()])
         self.skip_errors = skip_errors
-        self.modefied_nodes = []
-        self.to_remove_nodes = []
-        self.to_add_nodes = []
+        self.modefied_nodes = [] # type: List[BaseNode]
+        self.to_remove_nodes = [] # type: List[BaseNode]
+        self.to_add_nodes = [] # type: List[BaseNode]
         self.functions = {
             'default_options': self.process_default_options,
             'kwargs': self.process_kwargs,
             'target': self.process_target,
         }
-        self.info_dump = None
+        self.info_dump = None # type: Optional[Dict[str, Dict[str, dict]]]
 
     def analyze_meson(self):
         mlog.log('Analyzing meson file:', mlog.bold(os.path.join(self.sourcedir, environment.build_filename)))
@@ -392,8 +396,8 @@ class Rewriter:
         raise MesonException('Rewriting the meson.build failed')
 
     def find_target(self, target: str):
-        def check_list(name: str) -> List[BaseNode]:
-            result = []
+        def check_list(name: str) -> List[IntrospectionTarget]:
+            result = [] # type: List[IntrospectionTarget]
             for i in self.interpreter.targets:
                 if name == i['name'] or name == i['id']:
                     result += [i]
@@ -588,7 +592,7 @@ class Rewriter:
         if num_changed > 0 and node not in self.modefied_nodes:
             self.modefied_nodes += [node]
 
-    def find_assignment_node(self, node: BaseNode) -> AssignmentNode:
+    def find_assignment_node(self, node: BaseNode) -> Optional[AssignmentNode]:
         if hasattr(node, 'ast_id') and node.ast_id in self.interpreter.reverse_assignment:
             return self.interpreter.reverse_assignment[node.ast_id]
         return None

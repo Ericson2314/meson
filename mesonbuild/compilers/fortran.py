@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List
+from typing import Dict, List
 import subprocess, os
 from pathlib import Path
 
@@ -270,7 +270,7 @@ class IntelClFortranCompiler(IntelVisualStudioLikeCompiler, FortranCompiler):
         'release': ["/O2"],
         'minsize': ["/Os"],
         'custom': [],
-    }
+    } # type: Dict[str, List[str]]
 
     def __init__(self, exelist, for_machine: MachineChoice, version, is_cross, target: str, exe_wrapper=None):
         FortranCompiler.__init__(self, exelist, for_machine, version, is_cross, exe_wrapper)
