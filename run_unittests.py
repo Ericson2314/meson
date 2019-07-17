@@ -3717,6 +3717,8 @@ recommended as it is not supported on some platforms''')
         for idx, i in enumerate(res1):
             if i['name'] == 'cpp_std':
                 res1[idx]['value'] = 'c++14'
+            if i['name'] == 'build.cpp_std':
+                res1[idx]['value'] = 'c++14'
             if i['name'] == 'buildtype':
                 res1[idx]['value'] = 'release'
             if i['name'] == 'optimization':
@@ -5389,7 +5391,9 @@ endian = 'little'
         testdir = os.path.join(self.unit_test_dir, '51 std remains')
         self.init(testdir)
         compdb = self.get_compdb()
+        self.assertEqual(len(compdb), 2)
         self.assertRegex(compdb[0]['command'], '-std=c99')
+        self.assertRegex(compdb[1]['command'], '-std=c99')
         self.build()
 
     def test_identity_cross(self):
