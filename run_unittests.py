@@ -5384,14 +5384,6 @@ endian = 'little'
                 # Assert that
                 self.assertEqual(len(line.split(lib)), 2, msg=(lib, line))
 
-    @skipIfNoPkgconfig
-    def test_pkg_config_option(self):
-        testdir = os.path.join(self.unit_test_dir, '58 pkg_config_path option')
-        self.init(testdir, extra_args=[
-            '-Dbuild.pkg_config_path=' + os.path.join(testdir, 'build_extra_path'),
-            '-Dpkg_config_path=' + os.path.join(testdir, 'host_extra_path'),
-        ])
-
     def test_std_remains(self):
         # C_std defined in project options must be in effect also when native compiling.
         testdir = os.path.join(self.unit_test_dir, '51 std remains')
@@ -5470,6 +5462,14 @@ class LinuxCrossArmTests(BasePlatformTests):
         compdb = self.get_compdb()
         self.assertRegex(compdb[0]['command'], '-std=c99')
         self.build()
+
+    @skipIfNoPkgconfig
+    def test_pkg_config_option(self):
+        testdir = os.path.join(self.unit_test_dir, '58 pkg_config_path option')
+        self.init(testdir, extra_args=[
+            '-Dbuild.pkg_config_path=' + os.path.join(testdir, 'build_extra_path'),
+            '-Dpkg_config_path=' + os.path.join(testdir, 'host_extra_path'),
+        ])
 
 
 def should_run_cross_mingw_tests():
