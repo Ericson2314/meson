@@ -187,7 +187,7 @@ which are supported by GCC, Clang, and other compilers.
 | weak                 |
 | weakreaf             |
 
-### MSVC __declspec
+### MSVC `__declspec`
 
 These values are supported using the MSVC style `__declspec` annotation,
 which are supported by MSVC, GCC, Clang, and other compilers.
